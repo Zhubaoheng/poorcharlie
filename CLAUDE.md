@@ -8,9 +8,9 @@ Investagent is a Munger-style value investing multi-subagent system. It evaluate
 
 ```
 docs/architecture/   # System architecture and agent design docs
-specs/               # Agent specifications (to be added)
-src/                 # Source code (to be added)
-tests/               # Tests (to be added)
+specs/               # Component specs
+src/investagent/     # Python package (src layout, uv + Python 3.12)
+tests/               # pytest tests (unit + integration)
 ```
 
 ## Agent Pipeline
@@ -28,9 +28,16 @@ The system is an orchestrated pipeline of specialized subagents:
 9. **Critic Agent** — adversarial: find kill shots and permanent loss risks
 10. **Investment Committee Agent** — final verdict: REJECT / TOO_HARD / WATCHLIST / DEEP_DIVE / SPECIAL_SITUATION / INVESTABLE
 
+## Target Markets
+
+A-shares, HK stocks, US-listed Chinese ADRs. Filing types vary by market:
+- A-shares: 年报, 半年报, 季报 (CAS)
+- HK: 年报, 中期报告 (IFRS/HKFRS)
+- US ADR: 20-F, 6-K (US GAAP/IFRS)
+
 ## Architecture Constraints
 
-- **Context engineering is critical.** Raw filings never enter downstream agent contexts. Each filing is structured once; all subsequent agents consume standardized tables + short summaries only.
+- **Context engineering is critical.** Full filing documents never enter downstream agent contexts. Each filing is structured once into strong-typed tables + raw text excerpts for critical sections (accounting policies, footnotes, risk factors). Downstream agents consume these structured extracts, not raw filings.
 - All agent outputs must follow a **unified JSON schema** for caching and reuse.
 - Every agent must distinguish: **fact / inference / unknown**.
 - Any agent may output "stop / defer / refuse to proceed" when key unknowns are insurmountable.

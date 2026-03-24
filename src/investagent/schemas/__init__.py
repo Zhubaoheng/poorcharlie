@@ -8,6 +8,7 @@ from investagent.schemas.common import (
     StopSignal,
 )
 from investagent.schemas.company import CompanyIntake
+from investagent.schemas.filing import FilingMeta, FilingOutput
 
 __all__ = [
     "AgentMeta",
@@ -15,5 +16,7 @@ __all__ = [
     "CompanyIntake",
     "EvidenceItem",
     "EvidenceType",
+    "FilingMeta",
+    "FilingOutput",
     "StopSignal",
 ]
