@@ -1,0 +1,7 @@
+{
+  "ticker": "AAPL",
+  "name": "Apple Inc.",
+  "exchange": "NASDAQ",
+  "sector": "Technology",
+  "notes": "Sample company for testing"
+}
