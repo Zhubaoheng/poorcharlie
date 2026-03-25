@@ -15,6 +15,6 @@ async def run_agent(
     ctx: PipelineContext,
 ) -> BaseAgentOutput:
     """Run a single agent: call, store result in context."""
-    result = await agent.run(input_data)
+    result = await agent.run(input_data, ctx)
     ctx.set_result(agent.name, result)
     return result

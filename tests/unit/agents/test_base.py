@@ -26,7 +26,7 @@ class _ConcreteAgent(BaseAgent):
     def _agent_role_description(self) -> str:
         return "Test agent for unit testing."
 
-    def _build_user_context(self, input_data: BaseModel) -> dict[str, Any]:
+    def _build_user_context(self, input_data: BaseModel, ctx: Any = None) -> dict[str, Any]:
         return {}
 
 

@@ -28,7 +28,7 @@ class TriageAgent(BaseAgent):
             "explainable businesses should pass through to deep analysis."
         )
 
-    def _build_user_context(self, input_data: BaseModel) -> dict[str, Any]:
+    def _build_user_context(self, input_data: BaseModel, ctx: Any = None) -> dict[str, Any]:
         assert isinstance(input_data, CompanyIntake)
         return {
             "ticker": input_data.ticker,

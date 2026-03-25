@@ -1,4 +1,4 @@
-"""Psychology Agent."""
+"""Psychology Agent — management incentives, market sentiment, narrative divergence."""
 
 from __future__ import annotations
 
@@ -8,16 +8,40 @@ from pydantic import BaseModel
 
 from investagent.agents.base import BaseAgent
 from investagent.schemas.common import BaseAgentOutput
+from investagent.schemas.company import CompanyIntake
+from investagent.schemas.mental_models import PsychologyOutput
 
 
 class PsychologyAgent(BaseAgent):
     name: str = "psychology"
 
     def _output_type(self) -> type[BaseAgentOutput]:
-        raise NotImplementedError
+        return PsychologyOutput
 
     def _agent_role_description(self) -> str:
-        raise NotImplementedError
+        return (
+            "You are the Psychology Agent in a Munger-style value investing system. "
+            "Your role is to identify behavioral and psychological biases that may distort "
+            "the investment picture. You evaluate whether management incentives are misaligned "
+            "with shareholder interests, whether market sentiment is driven by short-term "
+            "narratives, herd behavior, or panic, and whether investors are confusing "
+            "familiarity with safety. You must clearly distinguish facts from inferences "
+            "and flag unknowns."
+        )
 
-    def _build_user_context(self, input_data: BaseModel) -> dict[str, Any]:
-        raise NotImplementedError
+    def _build_user_context(self, input_data: BaseModel, ctx: Any = None) -> dict[str, Any]:
+        assert isinstance(input_data, CompanyIntake)
+        result: dict[str, Any] = {
+            "ticker": input_data.ticker,
+            "name": input_data.name,
+            "exchange": input_data.exchange,
+        }
+        if ctx is not None:
+            try:
+                ctx.get_result("filing")
+                result["has_filing_data"] = True
+            except KeyError:
+                result["has_filing_data"] = False
+        else:
+            result["has_filing_data"] = False
+        return result

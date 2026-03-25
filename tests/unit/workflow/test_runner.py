@@ -39,10 +39,10 @@ class StubAgent(BaseAgent):
     def _agent_role_description(self) -> str:
         return "stub"
 
-    def _build_user_context(self, input_data: BaseModel) -> dict[str, Any]:
+    def _build_user_context(self, input_data: BaseModel, ctx: Any = None) -> dict[str, Any]:
         return {}
 
-    async def run(self, input_data: BaseModel) -> BaseAgentOutput:
+    async def run(self, input_data: BaseModel, ctx: Any = None) -> BaseAgentOutput:
         return self._output
 
 
@@ -60,10 +60,10 @@ class FailingAgent(BaseAgent):
     def _agent_role_description(self) -> str:
         return "failing"
 
-    def _build_user_context(self, input_data: BaseModel) -> dict[str, Any]:
+    def _build_user_context(self, input_data: BaseModel, ctx: Any = None) -> dict[str, Any]:
         return {}
 
-    async def run(self, input_data: BaseModel) -> BaseAgentOutput:
+    async def run(self, input_data: BaseModel, ctx: Any = None) -> BaseAgentOutput:
         raise RuntimeError("LLM call failed")
 
 

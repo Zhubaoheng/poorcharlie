@@ -51,8 +51,10 @@ class BaseAgent(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def _build_user_context(self, input_data: BaseModel) -> dict[str, Any]:
-        """Build the template context dict from *input_data*."""
+    def _build_user_context(
+        self, input_data: BaseModel, ctx: Any = None,
+    ) -> dict[str, Any]:
+        """Build the template context dict from *input_data* and optional *ctx*."""
         raise NotImplementedError
 
     # ------------------------------------------------------------------
@@ -67,8 +69,8 @@ class BaseAgent(ABC):
         text = (templates / f"{self.name}.txt").read_text(encoding="utf-8")
         return Template(text)
 
-    def _render_user_prompt(self, input_data: BaseModel) -> str:
-        context = self._build_user_context(input_data)
+    def _render_user_prompt(self, input_data: BaseModel, ctx: Any = None) -> str:
+        context = self._build_user_context(input_data, ctx)
         return self._load_template().render(**context)
 
     # ------------------------------------------------------------------
@@ -112,10 +114,12 @@ class BaseAgent(ABC):
     # Main entry point
     # ------------------------------------------------------------------
 
-    async def run(self, input_data: BaseModel) -> BaseAgentOutput:
+    async def run(
+        self, input_data: BaseModel, ctx: Any = None,
+    ) -> BaseAgentOutput:
         """Render prompts, call LLM, parse and validate output."""
         system = self._render_system_prompt()
-        user_prompt = self._render_user_prompt(input_data)
+        user_prompt = self._render_user_prompt(input_data, ctx)
         tool_schema = self._prepare_tool_schema()
 
         response = await self._llm.create_message(
