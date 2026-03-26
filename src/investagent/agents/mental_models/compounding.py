@@ -37,11 +37,14 @@ class CompoundingAgent(BaseAgent):
             "exchange": input_data.exchange,
         }
         if ctx is not None:
-            try:
-                ctx.get_result("filing")
-                result["has_filing_data"] = True
-            except KeyError:
-                result["has_filing_data"] = False
+            from investagent.agents.context_helpers import (
+                format_filing_json,
+                serialize_filing_for_prompt,
+            )
+            filing_data = serialize_filing_for_prompt(ctx)
+            result["has_filing_data"] = filing_data.get("has_filing", False)
+            result["filing_json"] = format_filing_json(filing_data)
         else:
             result["has_filing_data"] = False
+            result["filing_json"] = ""
         return result

@@ -102,44 +102,53 @@ def _search_filings_sync(
     start_year: int | None = None,
     end_year: int | None = None,
 ) -> list[FilingDocument]:
-    """Search HKEX filings via TitleSearchPanel POST."""
+    """Search HKEX filings via TitleSearchPanel POST.
+
+    Uses title keyword filtering ("Annual Report" / "Interim Report")
+    to avoid the 100-result limit being consumed by non-report filings.
+    """
     from_date = f"{start_year}0101" if start_year else ""
     to_date = f"{end_year}1231" if end_year else ""
 
+    all_body_parts: list[str] = []
+
     with FetcherSession(impersonate="chrome") as session:
-        # Get cookies
         session.get(_SEARCH_URL, stealthy_headers=True)
 
-        # Submit search form
-        resp = session.post(
-            _SEARCH_URL,
-            data={
-                "lang": "EN",
-                "category": "0",
-                "market": "SEHK",
-                "searchType": "0",
-                "documentType": "",
-                "t1code": "",
-                "t2Gcode": "",
-                "t2code": "",
-                "stockId": str(stock_id),
-                "from": from_date,
-                "to": to_date,
-                "title": "",
-            },
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Referer": _SEARCH_URL,
-            },
-        )
+        for title_kw in ("Annual Report", "Interim Report"):
+            resp = session.post(
+                _SEARCH_URL,
+                data={
+                    "lang": "EN",
+                    "category": "0",
+                    "market": "SEHK",
+                    "searchType": "0",
+                    "documentType": "",
+                    "t1code": "",
+                    "t2Gcode": "",
+                    "t2code": "",
+                    "stockId": str(stock_id),
+                    "from": from_date,
+                    "to": to_date,
+                    "title": title_kw,
+                },
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Referer": _SEARCH_URL,
+                },
+            )
 
-        if resp.status != 200:
-            logger.warning("HKEX search returned status %d", resp.status)
-            return []
+            if resp.status != 200:
+                logger.warning("HKEX search returned status %d for %s", resp.status, title_kw)
+                continue
 
-        body = resp.body.decode("utf-8", errors="replace") if isinstance(resp.body, bytes) else str(resp.body)
-        if not body:
-            return []
+            part = resp.body.decode("utf-8", errors="replace") if isinstance(resp.body, bytes) else str(resp.body)
+            if part:
+                all_body_parts.append(part)
+
+    body = "\n".join(all_body_parts)
+    if not body:
+        return []
 
     # Parse results: extract PDF/HTM links and corresponding dates
     links = re.findall(

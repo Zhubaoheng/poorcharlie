@@ -5,7 +5,21 @@
 - 股票代码：{{ ticker }}
 - 公司名称：{{ name }}
 - 交易所：{{ exchange }}
-- 是否有财报结构化数据：{{ has_filing_data }}
+{% if upstream_json %}
+## 上游 Agent 分析结论
+
+```json
+{{ upstream_json }}
+```
+{% endif %}
+
+{% if filing_json %}
+## 财务数据
+
+```json
+{{ filing_json }}
+```
+{% endif %}
 
 ## 核心任务
 

@@ -173,7 +173,7 @@ class FilingAgent(BaseAgent):
         annual_docs = [
             d for d in filing_docs
             if d.fiscal_period == "FY" or "Annual" in d.filing_type or "年报" in d.filing_type
-        ][:3]
+        ][:5]
 
         # If no annual reports, try all filings
         if not annual_docs:

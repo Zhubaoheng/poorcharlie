@@ -7,6 +7,14 @@
 - 交易所：{{ exchange }}
 - 是否有财报数据：{{ has_filing_data }}
 
+{% if has_filing_data %}
+## 财务数据（来自 Filing 结构化）
+
+```json
+{{ filing_json }}
+```
+
+{% endif %}
 ## 检查项目
 
 请逐一检查以下 10 项会计风险事项，对每项给出判断（正常/需关注/重大风险）：

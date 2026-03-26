@@ -70,29 +70,41 @@ def _make_mock_response(status: int = 200, body: bytes = b"") -> MagicMock:
     return page
 
 
-_SEARCH_RESULT_HTML = b"""<html><body>
-<table class="table"><tbody>
+_ANNUAL_HTML = b"""<html><body>
+<table><tbody>
 <tr><td>22/04/2025</td><td><a href="/listedco/2025/annual.pdf">Annual Report 2024</a></td></tr>
+</tbody></table>
+</body></html>"""
+
+_INTERIM_HTML = b"""<html><body>
+<table><tbody>
 <tr><td>17/09/2024</td><td><a href="/listedco/2024/interim.pdf">INTERIM REPORT 2024</a></td></tr>
-<tr><td>01/12/2024</td><td><a href="/listedco/2024/monthly.pdf">MONTHLY RETURN</a></td></tr>
 </tbody></table>
 </body></html>"""
 
 
-@patch("investagent.datasources.hkex._load_stock_ids")
-@patch("investagent.datasources.hkex.FetcherSession")
-async def test_search_filings_annual(mock_session_cls, mock_load_ids, fetcher):
+def _setup_hkex_mock(mock_session_cls, mock_load_ids, annual_html=_ANNUAL_HTML, interim_html=_INTERIM_HTML):
     mock_load_ids.return_value = {
         "01448": {"id": 98167, "name": "FU SHOU YUAN", "code": "01448"},
     }
-
     mock_session = MagicMock()
     mock_session.__enter__ = MagicMock(return_value=mock_session)
     mock_session.__exit__ = MagicMock(return_value=False)
     mock_session_cls.return_value = mock_session
 
     mock_session.get.return_value = _make_mock_response(200, b"<html>home</html>")
-    mock_session.post.return_value = _make_mock_response(200, _SEARCH_RESULT_HTML)
+    # Two POST calls: first for "Annual Report", then for "Interim Report"
+    mock_session.post.side_effect = [
+        _make_mock_response(200, annual_html),
+        _make_mock_response(200, interim_html),
+    ]
+    return mock_session
+
+
+@patch("investagent.datasources.hkex._load_stock_ids")
+@patch("investagent.datasources.hkex.FetcherSession")
+async def test_search_filings_annual(mock_session_cls, mock_load_ids, fetcher):
+    _setup_hkex_mock(mock_session_cls, mock_load_ids)
 
     results = await fetcher.search_filings("1448.HK", filing_types=["Annual Report"])
 
@@ -106,18 +118,8 @@ async def test_search_filings_annual(mock_session_cls, mock_load_ids, fetcher):
 @patch("investagent.datasources.hkex._load_stock_ids")
 @patch("investagent.datasources.hkex.FetcherSession")
 async def test_search_filings_all_types(mock_session_cls, mock_load_ids, fetcher):
-    mock_load_ids.return_value = {
-        "01448": {"id": 98167, "name": "FU SHOU YUAN", "code": "01448"},
-    }
-    mock_session = MagicMock()
-    mock_session.__enter__ = MagicMock(return_value=mock_session)
-    mock_session.__exit__ = MagicMock(return_value=False)
-    mock_session_cls.return_value = mock_session
+    _setup_hkex_mock(mock_session_cls, mock_load_ids)
 
-    mock_session.get.return_value = _make_mock_response(200, b"home")
-    mock_session.post.return_value = _make_mock_response(200, _SEARCH_RESULT_HTML)
-
-    # No filing_types filter — should return Annual + Interim (not Monthly)
     results = await fetcher.search_filings("1448.HK")
     assert len(results) == 2
     types = {r.filing_type for r in results}
@@ -134,16 +136,8 @@ async def test_search_filings_unknown_stock(mock_load_ids, fetcher):
 @patch("investagent.datasources.hkex._load_stock_ids")
 @patch("investagent.datasources.hkex.FetcherSession")
 async def test_search_filings_empty(mock_session_cls, mock_load_ids, fetcher):
-    mock_load_ids.return_value = {
-        "01448": {"id": 98167, "name": "FU SHOU YUAN", "code": "01448"},
-    }
-    mock_session = MagicMock()
-    mock_session.__enter__ = MagicMock(return_value=mock_session)
-    mock_session.__exit__ = MagicMock(return_value=False)
-    mock_session_cls.return_value = mock_session
-
-    mock_session.get.return_value = _make_mock_response(200, b"home")
-    mock_session.post.return_value = _make_mock_response(200, b"<html>No results</html>")
+    empty = b"<html>No results</html>"
+    _setup_hkex_mock(mock_session_cls, mock_load_ids, annual_html=empty, interim_html=empty)
 
     results = await fetcher.search_filings("1448.HK")
     assert results == []

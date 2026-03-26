@@ -5,7 +5,17 @@
 - 股票代码：{{ ticker }}
 - 公司名称：{{ name }}
 - 交易所：{{ exchange }}
-- 是否有财报结构化数据：{{ has_filing_data }}
+{% if upstream_json %}
+## 上游全部 Agent 分析结论
+
+以下是前 13 个 Agent 的结构化输出汇总，请基于这些数据做最终裁决：
+
+```json
+{{ upstream_json }}
+```
+{% else %}
+⚠ 上游数据不可用。
+{% endif %}
 
 ## 核心任务
 

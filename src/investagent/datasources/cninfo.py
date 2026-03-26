@@ -210,12 +210,22 @@ class CninfoFetcher(FilingFetcher):
                             fd = date.today()
 
                         # Determine filing type from title
-                        # Check longer strings first to avoid "年报" matching "半年报"
-                        detected_type = "年报"
-                        for ft in sorted(filing_types, key=len, reverse=True):
-                            if ft in title:
-                                detected_type = ft
-                                break
+                        # "半年度报告" contains "年报" so check "半年" first
+                        if "半年" in title:
+                            detected_type = "半年报"
+                        elif "三季" in title or "第三季" in title:
+                            detected_type = "三季报"
+                        elif "一季" in title or "第一季" in title:
+                            detected_type = "一季报"
+                        elif "年报" in title or "年度报告" in title:
+                            detected_type = "年报"
+                        else:
+                            detected_type = "年报"
+
+                        # Extract fiscal year from title (e.g., "2024年年度报告" → "2024")
+                        import re as _re
+                        fy_match = _re.search(r"(\d{4})\s*年", title)
+                        fiscal_year = fy_match.group(1) if fy_match else str(fd.year)
 
                         source_url = f"{_STATIC_BASE}{adjunct_url}"
 
@@ -225,7 +235,7 @@ class CninfoFetcher(FilingFetcher):
                                 ticker=ticker,
                                 company_name=ann.get("secName", ticker),
                                 filing_type=detected_type,
-                                fiscal_year=str(fd.year),
+                                fiscal_year=fiscal_year,
                                 fiscal_period=_PERIOD_MAP.get(detected_type, "FY"),
                                 filing_date=fd,
                                 source_url=source_url,

@@ -41,7 +41,7 @@ from investagent.schemas.info_capture import (
 logger = logging.getLogger(__name__)
 
 # How many years of filings to look for
-_DEFAULT_LOOKBACK_YEARS = 5
+_DEFAULT_LOOKBACK_YEARS = 7
 
 
 def _filing_to_ref(doc: FilingDocument) -> FilingRef:
