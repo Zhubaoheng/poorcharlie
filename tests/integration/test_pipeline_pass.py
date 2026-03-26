@@ -206,13 +206,13 @@ def _committee_investable() -> dict:
     }
 
 
-# 14 agent calls: triage, info_capture, filing, accounting_risk,
+# 14 agent calls: info_capture, filing, triage, accounting_risk,
 # financial_quality, net_cash, valuation, moat, compounding, psychology,
 # systems, ecology, critic, committee
 _ALL_RESPONSES = [
-    _triage_pass,
     _info_capture,
     _filing,
+    _triage_pass,
     _accounting_risk_green,
     _financial_quality_pass,
     _net_cash,

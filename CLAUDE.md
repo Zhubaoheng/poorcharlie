@@ -17,9 +17,9 @@ tests/               # pytest tests (unit + integration)
 
 The system is an orchestrated pipeline of specialized subagents:
 
-1. **Triage Agent** — gate: is the company explainable from public info?
-2. **Info Capture Agent** — gather filings, market data, official sources
-3. **Filing Structuring Skill** — standardize 5-year financials into structured tables
+1. **Info Capture Agent** — gather filings, market data, official sources (real API fetching)
+2. **Filing Structuring Skill** — standardize 5-year financials into structured tables
+3. **Triage Agent** — gate: is the company explainable from actual data? (runs after data gathering)
 4. **Accounting Risk Agent** — detect accounting method changes, rate GREEN/YELLOW/RED
 5. **Financial Quality Agent** — score: per-share growth, ROIC, cash conversion, leverage, capital allocation, moat traces
 6. **Net Cash & Capital Return Agent** — net cash / market cap analysis

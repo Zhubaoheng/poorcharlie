@@ -88,7 +88,7 @@ class InfoCaptureAgent(BaseAgent):
     def _agent_role_description(self) -> str:
         return (
             "You are the Info Capture Agent. Your role is to build a complete, "
-            "reusable research package for a company that passed triage. "
+            "reusable research package for a company entering the analysis pipeline. "
             "You are given pre-fetched filing manifests and market data. "
             "Your job is to synthesize a company profile, list official and "
             "third-party sources, and flag any missing items. "
@@ -214,6 +214,11 @@ class InfoCaptureAgent(BaseAgent):
             raise AgentOutputError(
                 f"{self.name}: no tool_use block in LLM response"
             )
+
+        # Repair JSON strings returned by some providers
+        from investagent.agents.base import _repair_json_strings
+
+        tool_input = _repair_json_strings(tool_input)
 
         # Phase 3: Override LLM's filing_manifest and market_snapshot
         # with real fetcher data (ground truth)

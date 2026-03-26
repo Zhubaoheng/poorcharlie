@@ -102,11 +102,11 @@ def _accounting_risk_red() -> dict:
     }
 
 
-# 4 agents: triage (pass) -> info_capture -> filing -> accounting_risk (RED -> stop)
+# 4 agents: info_capture -> filing -> triage (pass) -> accounting_risk (RED -> stop)
 _RESPONSES = [
-    _triage_pass,
     _info_capture,
     _filing,
+    _triage_pass,
     _accounting_risk_red,
 ]
 
@@ -156,7 +156,7 @@ async def test_pipeline_stop_at_accounting_risk():
 
     # Only first 4 agents should have run
     completed = ctx.completed_agents()
-    assert completed == ["triage", "info_capture", "filing", "accounting_risk"]
+    assert completed == ["info_capture", "filing", "triage", "accounting_risk"]
 
     # No agents after accounting_risk
     assert "financial_quality" not in completed

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.resources
+import json
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from typing import Any
@@ -17,6 +18,52 @@ from investagent.schemas.common import AgentMeta, BaseAgentOutput
 
 class AgentOutputError(Exception):
     """Raised when LLM response cannot be parsed into the expected output."""
+
+
+def _repair_json_strings(obj: Any) -> Any:
+    """Repair common LLM output quirks before Pydantic validation.
+
+    Handles:
+    - JSON strings where dicts/lists are expected (MiniMax serialization quirk)
+    - Recursively applied to all nested structures
+    """
+    if isinstance(obj, str):
+        stripped = obj.strip()
+        if (stripped.startswith("{") and stripped.endswith("}")) or (
+            stripped.startswith("[") and stripped.endswith("]")
+        ):
+            try:
+                return _repair_json_strings(json.loads(stripped))
+            except (json.JSONDecodeError, ValueError):
+                return obj
+        return obj
+    elif isinstance(obj, dict):
+        return {k: _repair_json_strings(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        # If all items are strings, keep as-is (Pydantic may expect list[str])
+        # The list will be validated as-is; if the schema expects str,
+        # Pydantic will fail — but we handle that below.
+        return [_repair_json_strings(item) for item in obj]
+    return obj
+
+
+def _coerce_lists_to_strings(obj: Any, schema: dict[str, Any]) -> Any:
+    """Coerce list values to joined strings when the schema expects a string.
+
+    Some LLM providers return list[str] for fields typed as str.
+    """
+    if not isinstance(obj, dict) or not schema:
+        return obj
+    props = schema.get("properties", {})
+    for key, value in obj.items():
+        prop_schema = props.get(key, {})
+        prop_type = prop_schema.get("type")
+        if isinstance(value, list) and prop_type == "string":
+            # Join list items into a single string
+            obj[key] = "\n".join(str(item) for item in value)
+        elif isinstance(value, dict) and prop_type == "object":
+            obj[key] = _coerce_lists_to_strings(value, prop_schema)
+    return obj
 
 
 class BaseAgent(ABC):
@@ -116,37 +163,56 @@ class BaseAgent(ABC):
 
     async def run(
         self, input_data: BaseModel, ctx: Any = None,
+        *, max_retries: int = 2,
     ) -> BaseAgentOutput:
-        """Render prompts, call LLM, parse and validate output."""
+        """Render prompts, call LLM, parse and validate output.
+
+        Retries up to *max_retries* times if the LLM fails to return a
+        valid tool_use block (common with some providers on complex schemas).
+        """
         system = self._render_system_prompt()
         user_prompt = self._render_user_prompt(input_data, ctx)
         tool_schema = self._prepare_tool_schema()
 
-        response = await self._llm.create_message(
-            system=system,
-            messages=[{"role": "user", "content": user_prompt}],
-            tools=[tool_schema],
-        )
-
-        # Extract tool_use block
-        tool_input = None
-        for block in response.content:
-            if block.type == "tool_use":
-                tool_input = block.input
-                break
-
-        if tool_input is None:
-            raise AgentOutputError(
-                f"{self.name}: no tool_use block in LLM response"
+        last_error: Exception | None = None
+        for attempt in range(1 + max_retries):
+            response = await self._llm.create_message(
+                system=system,
+                messages=[{"role": "user", "content": user_prompt}],
+                tools=[tool_schema],
             )
 
-        # Inject server-managed meta (overwrites anything the LLM emitted)
-        meta = self._build_meta(self.name, response)
-        tool_input["meta"] = meta.model_dump(mode="json")
+            # Extract tool_use block
+            tool_input = None
+            for block in response.content:
+                if block.type == "tool_use":
+                    tool_input = block.input
+                    break
 
-        try:
-            return self._output_type().model_validate(tool_input)
-        except Exception as exc:
-            raise AgentOutputError(
-                f"{self.name}: failed to validate output: {exc}"
-            ) from exc
+            if tool_input is None:
+                last_error = AgentOutputError(
+                    f"{self.name}: no tool_use block in LLM response "
+                    f"(attempt {attempt + 1}/{1 + max_retries})"
+                )
+                continue
+
+            # Repair LLM output quirks
+            tool_input = _repair_json_strings(tool_input)
+            tool_input = _coerce_lists_to_strings(
+                tool_input, self._output_type().model_json_schema(),
+            )
+
+            # Inject server-managed meta (overwrites anything the LLM emitted)
+            meta = self._build_meta(self.name, response)
+            tool_input["meta"] = meta.model_dump(mode="json")
+
+            try:
+                return self._output_type().model_validate(tool_input)
+            except Exception as exc:
+                last_error = AgentOutputError(
+                    f"{self.name}: failed to validate output "
+                    f"(attempt {attempt + 1}/{1 + max_retries}): {exc}"
+                )
+                continue
+
+        raise last_error  # type: ignore[misc]

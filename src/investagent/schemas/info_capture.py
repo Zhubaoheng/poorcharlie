@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel
 
 from investagent.schemas.common import BaseAgentOutput
@@ -29,7 +31,7 @@ class FilingRef(BaseModel, frozen=True):
 
 
 class InfoCaptureOutput(BaseAgentOutput):
-    company_profile: dict[str, str]
+    company_profile: dict[str, Any]
     filing_manifest: list[FilingRef]
     official_sources: list[str]
     trusted_third_party_sources: list[str]

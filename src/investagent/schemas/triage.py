@@ -28,3 +28,4 @@ class TriageOutput(BaseAgentOutput):
     fatal_unknowns: list[str]
     why_it_is_or_is_not_coverable: str
     next_step: str
+    data_availability_summary: str | None = None

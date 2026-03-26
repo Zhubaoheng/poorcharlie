@@ -42,9 +42,9 @@ async def run_pipeline(
     """Run the full 10-stage analysis pipeline.
 
     Stages:
-    1. Triage -> gate check
-    2. Info Capture (with real data fetching)
-    3. Filing Structuring
+    1. Info Capture (with real data fetching)
+    2. Filing Structuring
+    3. Triage -> gate check (now with real data)
     4. Accounting Risk -> gate check
     5. Financial Quality -> gate check
     6. Net Cash
@@ -62,16 +62,7 @@ async def run_pipeline(
         )
     ctx = PipelineContext(intake)
 
-    # Stage 1: Triage
-    await run_agent(TriageAgent(llm), intake, ctx)
-    if ctx.is_stopped():
-        return ctx
-    proceed, reason = check_triage_gate(ctx)
-    if not proceed:
-        ctx.stop(reason)
-        return ctx
-
-    # Stage 2: Info Capture (with datasource integration)
+    # Stage 1: Info Capture (with datasource integration)
     info_agent = InfoCaptureAgent(
         llm,
         filing_fetcher=filing_fetcher,
@@ -81,9 +72,18 @@ async def run_pipeline(
     if ctx.is_stopped():
         return ctx
 
-    # Stage 3: Filing Structuring
+    # Stage 2: Filing Structuring
     await run_agent(FilingAgent(llm), intake, ctx)
     if ctx.is_stopped():
+        return ctx
+
+    # Stage 3: Triage (with real data from InfoCapture + Filing)
+    await run_agent(TriageAgent(llm), intake, ctx)
+    if ctx.is_stopped():
+        return ctx
+    proceed, reason = check_triage_gate(ctx)
+    if not proceed:
+        ctx.stop(reason)
         return ctx
 
     # Stage 4: Accounting Risk
