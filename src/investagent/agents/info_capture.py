@@ -190,53 +190,65 @@ class InfoCaptureAgent(BaseAgent):
         self._fetched_filings = filing_refs
         self._fetched_snapshot = snapshot
 
-        # Phase 2: Call LLM for company profile + source identification
+        # Phase 2: Call LLM with retry for company profile + source identification
+        from investagent.agents.base import (
+            AgentOutputError,
+            _coerce_lists_to_strings,
+            _repair_json_strings,
+        )
+
         system = self._render_system_prompt()
         user_prompt = self._render_user_prompt(input_data, ctx)
         tool_schema = self._prepare_tool_schema()
+        max_retries = 2
 
-        response = await self._llm.create_message(
-            system=system,
-            messages=[{"role": "user", "content": user_prompt}],
-            tools=[tool_schema],
-        )
-
-        # Extract tool_use block
-        tool_input = None
-        for block in response.content:
-            if block.type == "tool_use":
-                tool_input = block.input
-                break
-
-        if tool_input is None:
-            from investagent.agents.base import AgentOutputError
-
-            raise AgentOutputError(
-                f"{self.name}: no tool_use block in LLM response"
+        last_error: Exception | None = None
+        for attempt in range(1 + max_retries):
+            response = await self._llm.create_message(
+                system=system,
+                messages=[{"role": "user", "content": user_prompt}],
+                tools=[tool_schema],
             )
 
-        # Repair JSON strings returned by some providers
-        from investagent.agents.base import _repair_json_strings
+            # Extract tool_use block
+            tool_input = None
+            for block in response.content:
+                if block.type == "tool_use":
+                    tool_input = block.input
+                    break
 
-        tool_input = _repair_json_strings(tool_input)
+            if tool_input is None:
+                last_error = AgentOutputError(
+                    f"{self.name}: no tool_use block "
+                    f"(attempt {attempt + 1}/{1 + max_retries})"
+                )
+                continue
 
-        # Phase 3: Override LLM's filing_manifest and market_snapshot
-        # with real fetcher data (ground truth)
-        tool_input["filing_manifest"] = [r.model_dump() for r in filing_refs]
-        tool_input["market_snapshot"] = snapshot.model_dump()
+            # Repair LLM output quirks
+            tool_input = _repair_json_strings(tool_input)
+            tool_input = _coerce_lists_to_strings(
+                tool_input, InfoCaptureOutput.model_json_schema(),
+            )
 
-        # Inject server-managed meta
-        meta = self._build_meta(self.name, response)
-        tool_input["meta"] = meta.model_dump(mode="json")
+            # Phase 3: Override with fetcher ground truth
+            tool_input["filing_manifest"] = [r.model_dump() for r in filing_refs]
+            tool_input["market_snapshot"] = snapshot.model_dump()
 
-        try:
-            output = InfoCaptureOutput.model_validate(tool_input)
-        except Exception as exc:
-            from investagent.agents.base import AgentOutputError
+            # Inject server-managed meta
+            meta = self._build_meta(self.name, response)
+            tool_input["meta"] = meta.model_dump(mode="json")
 
-            raise AgentOutputError(
-                f"{self.name}: failed to validate output: {exc}"
-            ) from exc
+            try:
+                output = InfoCaptureOutput.model_validate(tool_input)
+                break  # success
+            except Exception as exc:
+                last_error = AgentOutputError(
+                    f"{self.name}: failed to validate "
+                    f"(attempt {attempt + 1}/{1 + max_retries}): {exc}"
+                )
+                continue
+        else:
+            raise last_error  # type: ignore[misc]
 
         # Store raw FilingDocuments in context for downstream agents
         if ctx is not None and filing_docs:

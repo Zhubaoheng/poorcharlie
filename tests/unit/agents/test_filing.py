@@ -1,19 +1,26 @@
-"""Tests for investagent.agents.filing."""
+"""Tests for investagent.agents.filing — hybrid agent with real content extraction."""
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from datetime import date
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from investagent.agents.base import AgentOutputError
 from investagent.agents.filing import FilingAgent
+from investagent.datasources.base import FilingDocument
 from investagent.llm import LLMClient
 from investagent.schemas.company import CompanyIntake
+from investagent.workflow.context import PipelineContext
 
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
 
 def _intake() -> CompanyIntake:
-    return CompanyIntake(ticker="600519", name="贵州茅台", exchange="SSE")
+    return CompanyIntake(ticker="1448", name="福寿园", exchange="HKEX")
 
 
 def _mock_llm() -> LLMClient:
@@ -36,101 +43,176 @@ def _mock_response(tool_input: dict) -> MagicMock:
 def _filing_tool_input() -> dict:
     return {
         "filing_meta": {
-            "market": "A_SHARE",
-            "accounting_standard": "CAS",
-            "fiscal_years_covered": ["2021", "2022", "2023"],
-            "filing_types": ["年报"],
+            "market": "HK",
+            "accounting_standard": "HKFRS",
+            "fiscal_years_covered": ["2023", "2024"],
+            "filing_types": ["Annual Report"],
             "currency": "CNY",
-            "reporting_language": "zh-CN",
+            "reporting_language": "en",
         },
         "income_statement": [
             {
-                "fiscal_year": "2023",
+                "fiscal_year": "2024",
                 "fiscal_period": "FY",
-                "revenue": 150056000000.0,
-                "net_income": 74734000000.0,
-                "net_income_to_parent": 74734000000.0,
-                "eps_basic": 59.49,
+                "revenue": 2800000000.0,
+                "net_income": 700000000.0,
             },
         ],
         "balance_sheet": [
             {
-                "fiscal_year": "2023",
-                "cash_and_equivalents": 57200000000.0,
-                "total_assets": 256800000000.0,
-                "total_liabilities": 74500000000.0,
-                "shareholders_equity": 175000000000.0,
+                "fiscal_year": "2024",
+                "total_assets": 15000000000.0,
+                "shareholders_equity": 10000000000.0,
             },
         ],
         "cash_flow": [
             {
-                "fiscal_year": "2023",
-                "operating_cash_flow": 82000000000.0,
-                "capex": -5800000000.0,
-                "free_cash_flow": 76200000000.0,
-                "dividends_paid": -38000000000.0,
+                "fiscal_year": "2024",
+                "operating_cash_flow": 900000000.0,
+                "free_cash_flow": 800000000.0,
             },
         ],
-        "segments": [
-            {
-                "fiscal_year": "2023",
-                "segment_name": "茅台酒",
-                "revenue": 140000000000.0,
-            },
-        ],
+        "segments": [],
         "accounting_policies": [
             {
                 "category": "revenue_recognition",
-                "fiscal_year": "2023",
-                "method": "在控制权转移时点确认收入",
-                "raw_text": "公司在将商品控制权转移给客户时确认收入...",
+                "fiscal_year": "2024",
+                "method": "Revenue recognised at point in time",
+                "raw_text": "Revenue from burial services...",
                 "changed_from_prior": False,
             },
         ],
         "debt_schedule": [],
         "covenant_status": [],
         "special_items": [],
-        "concentration": {
-            "top_customer_pct": None,
-            "top5_customers_pct": None,
-            "customer_losses": [],
-            "major_supplier_dependencies": ["高粱供应"],
-            "top5_suppliers_pct": None,
-            "geographic_revenue_split": {"国内": 0.95, "海外": 0.05},
-        },
+        "concentration": None,
         "buyback_history": [],
         "acquisition_history": [],
-        "dividend_per_share_history": [
-            {"fiscal_year": "2023", "dividend_per_share": 30.226},
-        ],
+        "dividend_per_share_history": [],
         "footnote_extracts": [],
         "risk_factors": [
             {
-                "category": "policy",
-                "description": "白酒行业消费税政策不确定性",
-                "raw_text": "白酒消费税采用从价加从量复合计税...",
+                "category": "regulatory",
+                "description": "Burial reform policies",
+                "raw_text": "The PRC government promotes...",
                 "materiality": "high",
             },
         ],
     }
 
 
-@pytest.mark.asyncio
-async def test_filing_output():
+def _make_filing_doc(
+    fiscal_year: str = "2024",
+    raw_content: bytes | None = b"%PDF-fake",
+    text_content: str | None = None,
+) -> FilingDocument:
+    return FilingDocument(
+        market="HK",
+        ticker="1448",
+        company_name="FU SHOU YUAN",
+        filing_type="Annual Report",
+        fiscal_year=fiscal_year,
+        fiscal_period="FY",
+        filing_date=date(2025, 4, 22),
+        source_url="https://example.com/report.pdf",
+        content_type="pdf",
+        raw_content=raw_content,
+        text_content=text_content,
+    )
+
+
+def _make_ctx(filing_docs: list[FilingDocument] | None = None) -> PipelineContext:
+    ctx = PipelineContext(_intake())
+    if filing_docs is not None:
+        ctx.set_data("filing_documents", filing_docs)
+    return ctx
+
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+
+@patch("investagent.agents.filing.extract_pdf_markdown")
+@patch("investagent.agents.filing.extract_sections")
+async def test_filing_with_pdf_content(mock_sections, mock_pdf):
+    """PDF content flows through extraction into LLM context."""
+    mock_pdf.return_value = "## Income Statement\n| Revenue | 2800M |"
+    mock_sections.return_value = {"income_statement": "Revenue: 2800M"}
+
     llm = _mock_llm()
     llm.create_message = AsyncMock(
         return_value=_mock_response(_filing_tool_input())
     )
+
+    doc = _make_filing_doc()
+    ctx = _make_ctx([doc])
+
+    agent = FilingAgent(llm)
+    result = await agent.run(_intake(), ctx)
+
+    assert result.meta.agent_name == "filing"
+    assert result.filing_meta.market == "HK"
+    assert result.income_statement[0].revenue == 2800000000.0
+    mock_pdf.assert_called_once_with(b"%PDF-fake")
+    mock_sections.assert_called_once()
+
+
+@patch("investagent.agents.filing.extract_pdf_markdown")
+@patch("investagent.agents.filing.extract_sections")
+async def test_filing_with_text_content(mock_sections, mock_pdf):
+    """Text content (e.g., EDGAR HTML) skips PDF extraction."""
+    mock_sections.return_value = {"income_statement": "Revenue: 100M"}
+
+    llm = _mock_llm()
+    llm.create_message = AsyncMock(
+        return_value=_mock_response(_filing_tool_input())
+    )
+
+    doc = _make_filing_doc(raw_content=None, text_content="<html>Annual Report</html>")
+    ctx = _make_ctx([doc])
+
+    agent = FilingAgent(llm)
+    result = await agent.run(_intake(), ctx)
+
+    assert result.meta.agent_name == "filing"
+    mock_pdf.assert_not_called()  # No PDF extraction for text content
+
+
+@patch("investagent.agents.filing.extract_pdf_markdown")
+@patch("investagent.agents.filing.extract_sections")
+async def test_filing_extraction_failure_graceful(mock_sections, mock_pdf):
+    """If PDF extraction fails, agent still produces output."""
+    mock_pdf.return_value = ""  # Extraction failed
+    mock_sections.return_value = {}
+
+    llm = _mock_llm()
+    llm.create_message = AsyncMock(
+        return_value=_mock_response(_filing_tool_input())
+    )
+
+    doc = _make_filing_doc()
+    ctx = _make_ctx([doc])
+
+    agent = FilingAgent(llm)
+    result = await agent.run(_intake(), ctx)
+
+    # Should succeed even with no extracted content
+    assert result.filing_meta.market == "HK"
+
+
+async def test_filing_no_context():
+    """FilingAgent works without context (no filing_documents)."""
+    llm = _mock_llm()
+    llm.create_message = AsyncMock(
+        return_value=_mock_response(_filing_tool_input())
+    )
+
     agent = FilingAgent(llm)
     result = await agent.run(_intake())
+
     assert result.meta.agent_name == "filing"
-    assert result.filing_meta.market == "A_SHARE"
-    assert len(result.income_statement) == 1
-    assert result.income_statement[0].revenue == 150056000000.0
-    assert result.meta.token_usage == 300
 
 
-@pytest.mark.asyncio
 async def test_filing_meta_is_server_generated():
     tool_input = _filing_tool_input()
     tool_input["meta"] = {
@@ -149,16 +231,13 @@ async def test_filing_meta_is_server_generated():
     assert result.meta.model_used == "claude-sonnet-4-20250514"
 
 
-@pytest.mark.asyncio
 async def test_filing_no_tool_use_raises():
     text_block = MagicMock()
     text_block.type = "text"
     response = MagicMock()
     response.content = [text_block]
     response.model = "claude-sonnet-4-20250514"
-    response.usage = MagicMock()
-    response.usage.input_tokens = 50
-    response.usage.output_tokens = 100
+    response.usage = MagicMock(input_tokens=50, output_tokens=100)
 
     llm = _mock_llm()
     llm.create_message = AsyncMock(return_value=response)
@@ -167,7 +246,6 @@ async def test_filing_no_tool_use_raises():
         await agent.run(_intake())
 
 
-@pytest.mark.asyncio
 async def test_filing_malformed_output_raises():
     llm = _mock_llm()
     llm.create_message = AsyncMock(

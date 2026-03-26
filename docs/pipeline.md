@@ -478,3 +478,4 @@ CompanyIntake
 | 端到端 LLM 调用 | ❌ | 目前全部 mock |
 | CLI 入口 | ❌ | 无命令行工具 |
 | 197 tests | ✅ | 全部通过 |
+PYTHONPATH=/root/autodl-tmp/RL_Graph_Generation:$PYTHONPATH CUDA_VISIBLE_DEVICES=2 /root/miniconda3/envs/defog/bin/python src/train_flow_grpo.py +experiment=tree dataset=tree +grpo=tree_reinforce grpo.pretrained_checkpoint=/root/autodl-tmp/checkpoint/tree.ckpt

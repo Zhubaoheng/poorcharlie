@@ -23,26 +23,26 @@ class AgentOutputError(Exception):
 def _repair_json_strings(obj: Any) -> Any:
     """Repair common LLM output quirks before Pydantic validation.
 
-    Handles:
-    - JSON strings where dicts/lists are expected (MiniMax serialization quirk)
-    - Recursively applied to all nested structures
+    Some providers (e.g., MiniMax) return nested objects/arrays as JSON
+    strings instead of native dicts/lists. This function recursively
+    parses any string that is valid JSON into its native Python type.
     """
     if isinstance(obj, str):
+        # Try to parse any string that could be JSON
         stripped = obj.strip()
-        if (stripped.startswith("{") and stripped.endswith("}")) or (
-            stripped.startswith("[") and stripped.endswith("]")
-        ):
+        if stripped and stripped[0] in ("{", "[", '"'):
             try:
-                return _repair_json_strings(json.loads(stripped))
+                parsed = json.loads(stripped)
+                # Only accept if it produced a different type (dict/list)
+                # Don't convert "hello" -> "hello" (string to string)
+                if not isinstance(parsed, str):
+                    return _repair_json_strings(parsed)
             except (json.JSONDecodeError, ValueError):
-                return obj
+                pass
         return obj
     elif isinstance(obj, dict):
         return {k: _repair_json_strings(v) for k, v in obj.items()}
     elif isinstance(obj, list):
-        # If all items are strings, keep as-is (Pydantic may expect list[str])
-        # The list will be validated as-is; if the schema expects str,
-        # Pydantic will fail — but we handle that below.
         return [_repair_json_strings(item) for item in obj]
     return obj
 

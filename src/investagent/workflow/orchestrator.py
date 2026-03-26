@@ -72,8 +72,9 @@ async def run_pipeline(
     if ctx.is_stopped():
         return ctx
 
-    # Stage 2: Filing Structuring
-    await run_agent(FilingAgent(llm), intake, ctx)
+    # Stage 2: Filing Structuring (with real content extraction)
+    filing_agent = FilingAgent(llm, filing_fetcher=filing_fetcher)
+    await run_agent(filing_agent, intake, ctx)
     if ctx.is_stopped():
         return ctx
 

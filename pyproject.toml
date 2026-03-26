@@ -10,6 +10,7 @@ dependencies = [
     "edgartools",
     "scrapling[fetchers]",
     "yfinance",
+    "pymupdf4llm",
 ]
 
 [dependency-groups]
@@ -17,6 +18,9 @@ dev = [
     "pytest",
     "pytest-asyncio",
 ]
+
+[project.scripts]
+investagent = "investagent.cli:main"
 
 [build-system]
 requires = ["hatchling"]
