@@ -1,0 +1,1756 @@
+{
+  "company": {
+    "ticker": "1448",
+    "name": "福寿园",
+    "exchange": "HKEX",
+    "sector": "殡葬服务",
+    "notes": null
+  },
+  "timestamp": "2026-03-27T19:34:22.911171",
+  "elapsed_seconds": 912.7,
+  "stopped": false,
+  "stop_reason": null,
+  "completed_agents": [
+    "info_capture",
+    "filing",
+    "triage",
+    "accounting_risk",
+    "financial_quality",
+    "net_cash",
+    "valuation",
+    "moat",
+    "ecology",
+    "psychology",
+    "compounding",
+    "systems",
+    "critic",
+    "committee"
+  ],
+  "total_tokens": 239628,
+  "agents": {
+    "info_capture": {
+      "meta": {
+        "agent_name": "info_capture",
+        "timestamp": "2026-03-27T11:19:54.465492+00:00",
+        "model_used": "MiniMax-M2.7-highspeed",
+        "token_usage": 5144
+      },
+      "output": {
+        "stop_signal": null,
+        "company_profile": {
+          "core_services": [
+            "墓地开发与销售",
+            "殡仪服务",
+            "墓地管理服务",
+            "生命文化纪念服务"
+          ],
+          "fiscal_year_end": "12月31日",
+          "founded_year": "1994年",
+          "full_name_en": "Fu Shou Yuan International Holdings Limited",
+          "full_name_zh": "福寿园国际集团有限公司",
+          "industry": "殡葬服务业",
+          "ipo_date": "2013年12月19日",
+          "key_controlling_shareholder": "上海中民资投资有限公司（实际控制人白晓江及其一致行动人）",
+          "key_management": [
+            "白晓江（主席兼执行董事）",
+            "王计生（执行董事兼行政总裁）",
+            "陈霓（执行董事兼首席财务官）"
+          ],
+          "listing_location": "香港联合交易所",
+          "number_of_burial_parks": "约20余个（覆盖上海、北京、河南、江苏、安徽、辽宁、重庆等省市）",
+          "primary_business": "中国领先的殡葬服务提供商，主要从事墓地开发、墓位销售、殡仪服务及相关配套业务",
+          "short_name": "福寿园",
+          "stock_code": "1448",
+          "sub_sector": "墓地及殡仪服务"
+        },
+        "filing_manifest": [
+          {
+            "filing_type": "Annual Report",
+            "fiscal_year": "2026",
+            "fiscal_period": "FY",
+            "filing_date": "2026-03-19",
+            "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0319/2026031901654.pdf",
+            "content_type": "pdf"
+          },
+          {
+            "filing_type": "Annual Report",
+            "fiscal_year": "2025",
+            "fiscal_period": "FY",
+            "filing_date": "2025-04-22",
+            "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2025/0422/2025042201949.pdf",
+            "content_type": "pdf"
+          },
+          {
+            "filing_type": "Annual Report",
+            "fiscal_year": "2024",
+            "fiscal_period": "FY",
+            "filing_date": "2024-04-23",
+            "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2024/0423/2024042301300.pdf",
+            "content_type": "pdf"
+          },
+          {
+            "filing_type": "Annual Report",
+            "fiscal_year": "2023",
+            "fiscal_period": "FY",
+            "filing_date": "2023-04-24",
+            "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2023/0424/2023042402166.pdf",
+            "content_type": "pdf"
+          },
+          {
+            "filing_type": "Annual Report",
+            "fiscal_year": "2022",
+            "fiscal_period": "FY",
+            "filing_date": "2022-04-22",
+            "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2022/0422/2022042200548.pdf",
+            "content_type": "pdf"
+          },
+          {
+            "filing_type": "Annual Report",
+            "fiscal_year": "2021",
+            "fiscal_period": "FY",
+            "filing_date": "2021-04-21",
+            "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2021/0421/2021042100452.pdf",
+            "content_type": "pdf"
+          },
+          {
+            "filing_type": "Annual Report",
+            "fiscal_year": "2020",
+            "fiscal_period": "FY",
+            "filing_date": "2020-04-15",
+            "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2020/0415/2020041500491.pdf",
+            "content_type": "pdf"
+          },
+          {
+            "filing_type": "Annual Report",
+            "fiscal_year": "2019",
+            "fiscal_period": "FY",
+            "filing_date": "2019-04-18",
+            "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2019/0418/ltn20190418660.pdf",
+            "content_type": "pdf"
+          },
+          {
+            "filing_type": "Interim Report",
+            "fiscal_year": "2025",
+            "fiscal_period": "H1",
+            "filing_date": "2025-09-23",
+            "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2025/0923/2025092300688.pdf",
+            "content_type": "pdf"
+          },
+          {
+            "filing_type": "Interim Report",
+            "fiscal_year": "2024",
+            "fiscal_period": "H1",
+            "filing_date": "2024-09-17",
+            "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2024/0917/2024091700428.pdf",
+            "content_type": "pdf"
+          },
+          {
+            "filing_type": "Interim Report",
+            "fiscal_year": "2023",
+            "fiscal_period": "H1",
+            "filing_date": "2023-09-12",
+            "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2023/0912/2023091200407.pdf",
+            "content_type": "pdf"
+          },
+          {
+            "filing_type": "Interim Report",
+            "fiscal_year": "2022",
+            "fiscal_period": "H1",
+            "filing_date": "2022-09-13",
+            "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2022/0913/2022091300425.pdf",
+            "content_type": "pdf"
+          },
+          {
+            "filing_type": "Interim Report",
+            "fiscal_year": "2021",
+            "fiscal_period": "H1",
+            "filing_date": "2021-09-10",
+            "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2021/0910/2021091000318.pdf",
+            "content_type": "pdf"
+          },
+          {
+            "filing_type": "Interim Report",
+            "fiscal_year": "2020",
+            "fiscal_period": "H1",
+            "filing_date": "2020-09-11",
+            "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2020/0911/2020091100436.pdf",
+            "content_type": "pdf"
+          },
+          {
+            "filing_type": "Interim Report",
+            "fiscal_year": "2019",
+            "fiscal_period": "H1",
+            "filing_date": "2019-08-28",
+            "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2019/0828/ltn20190828250.pdf",
+            "content_type": "pdf"
+          }
+        ],
+        "official_sources": [
+          "香港联交所披露易：https://www.hkexnews.hk/listedco/listconews/sehk/index.htm（搜索股票代码 1448）",
+          "福寿园国际集团官网投资者关系页面",
+          "HKEXnews披露易 - 年报及中期报告",
+          "HKEXnews披露易 - 公告及通函",
+          "HKEXnews披露易 - 招股章程（如有）"
+        ],
+        "trusted_third_party_sources": [
+          "Bloomberg（彭博）",
+          "FactSet",
+          "Refinitiv Eikon",
+          "S&P Capital IQ",
+          "万得资讯（Wind）",
+          "东方财富（Choice）",
+          "国泰君安/中金公司/海通国际等券商研报",
+          "MSCI ESG Ratings（如有）",
+          "Sustainalytics ESG评分（如有）"
+        ],
+        "market_snapshot": {
+          "price": 2.64,
+          "market_cap": 5995607552.0,
+          "enterprise_value": 4568463360.0,
+          "pe_ratio": null,
+          "pb_ratio": 1.2328923,
+          "dividend_yield": 6.27,
+          "currency": "HKD"
+        },
+        "missing_items": [
+          "年报2018 FY：财报清单中最早的年报为2019 FY，缺失2018财年年报",
+          "中期报告2018 H1：财报清单中最早的中报为2019 H1，缺失2018上半财年中期报告",
+          "市盈率（P/E Ratio）：当前市场快照中为null，可能因当期亏损或数据不可用",
+          "ESG/社会责任报告：清单中未包含环境、社会及管治报告（港交所要求披露）",
+          "招股说明书：清单中未包含2013年上市时的招股章程（IPO Prospectus）",
+          "季度更新报告：清单中未包含任何季度运营数据更新（如有发布）",
+          "2026财年年报备注：年报列表中包含2026 FY（日期2026-03-19），该日期为未来日期，需核实是否为预发布报告或数据源录入有误"
+        ]
+      }
+    },
+    "filing": {
+      "meta": {
+        "agent_name": "filing",
+        "timestamp": "2026-03-27T11:26:25.394037+00:00",
+        "model_used": "MiniMax-M2.7-highspeed",
+        "token_usage": 97463
+      },
+      "output": {
+        "stop_signal": null,
+        "filing_meta": {
+          "market": "HK",
+          "accounting_standard": "IFRS",
+          "fiscal_years_covered": [
+            "2020",
+            "2021",
+            "2022",
+            "2023",
+            "2024",
+            "2025"
+          ],
+          "filing_types": [
+            "Annual Report",
+            "Condensed Consolidated Financial Statements",
+            "Interim Report"
+          ],
+          "currency": "RMB",
+          "reporting_language": "en",
+          "market_currency": "HKD"
+        },
+        "income_statement": [
+          {
+            "fiscal_year": "2024",
+            "fiscal_period": "FY",
+            "revenue": 2077484000.0,
+            "cost_of_revenue": 1456571000.0,
+            "gross_profit": 620913000.0,
+            "rd_expense": null,
+            "sga_expense": 244376000.0,
+            "depreciation_amortization": 173179000.0,
+            "operating_income": 709887000.0,
+            "interest_expense": 16422000.0,
+            "tax_provision": 313181000.0,
+            "net_income": 497328000.0,
+            "net_income_to_parent": 373134000.0,
+            "eps_basic": null,
+            "eps_diluted": null,
+            "shares_basic": 2275226829.0,
+            "shares_diluted": 2275226829.0
+          },
+          {
+            "fiscal_year": "2023",
+            "fiscal_period": "FY",
+            "revenue": 2628029000.0,
+            "cost_of_revenue": 1261143000.0,
+            "gross_profit": 1366886000.0,
+            "rd_expense": null,
+            "sga_expense": 171530000.0,
+            "depreciation_amortization": 166609000.0,
+            "operating_income": 1372199000.0,
+            "interest_expense": 7392000.0,
+            "tax_provision": 455638000.0,
+            "net_income": 975916000.0,
+            "net_income_to_parent": 791240000.0,
+            "eps_basic": null,
+            "eps_diluted": null,
+            "shares_basic": 2274275862.0,
+            "shares_diluted": 2274275862.0
+          },
+          {
+            "fiscal_year": "2022",
+            "fiscal_period": "FY",
+            "revenue": 2171626000.0,
+            "cost_of_revenue": null,
+            "gross_profit": null,
+            "rd_expense": null,
+            "sga_expense": null,
+            "depreciation_amortization": null,
+            "operating_income": 1092205000.0,
+            "interest_expense": null,
+            "tax_provision": null,
+            "net_income": null,
+            "net_income_to_parent": 658596000.0,
+            "eps_basic": null,
+            "eps_diluted": null,
+            "shares_basic": null,
+            "shares_diluted": null
+          },
+          {
+            "fiscal_year": "2021",
+            "fiscal_period": "FY",
+            "revenue": 2325848000.0,
+            "cost_of_revenue": 1256497000.0,
+            "gross_profit": 1069351000.0,
+            "rd_expense": null,
+            "sga_expense": 1256497000.0,
+            "depreciation_amortization": 146734000.0,
+            "operating_income": 1094478000.0,
+            "interest_expense": 7246000.0,
+            "tax_provision": 289591000.0,
+            "net_income": 889644000.0,
+            "net_income_to_parent": 720033000.0,
+            "eps_basic": 0.316,
+            "eps_diluted": 0.316,
+            "shares_basic": null,
+            "shares_diluted": null
+          },
+          {
+            "fiscal_year": "2020",
+            "fiscal_period": "FY",
+            "revenue": 1892537000.0,
+            "cost_of_revenue": null,
+            "gross_profit": null,
+            "rd_expense": null,
+            "sga_expense": null,
+            "depreciation_amortization": null,
+            "operating_income": null,
+            "interest_expense": 9525000.0,
+            "tax_provision": null,
+            "net_income": null,
+            "net_income_to_parent": 620064000.0,
+            "eps_basic": null,
+            "eps_diluted": null,
+            "shares_basic": null,
+            "shares_diluted": null
+          },
+          {
+            "fiscal_year": "2025",
+            "fiscal_period": "H1",
+            "revenue": 610850000.0,
+            "cost_of_revenue": null,
+            "gross_profit": 168699000.0,
+            "rd_expense": null,
+            "sga_expense": -442151000.0,
+            "depreciation_amortization": -220239000.0,
+            "operating_income": -229249000.0,
+            "interest_expense": -4601000.0,
+            "tax_provision": -31503000.0,
+            "net_income": -263873000.0,
+            "net_income_to_parent": -261411000.0,
+            "eps_basic": -0.115,
+            "eps_diluted": -0.115,
+            "shares_basic": 2272734783.0,
+            "shares_diluted": 2272734783.0
+          },
+          {
+            "fiscal_year": "2024",
+            "fiscal_period": "H1",
+            "revenue": 1099991000.0,
+            "cost_of_revenue": null,
+            "gross_profit": 844344000.0,
+            "rd_expense": null,
+            "sga_expense": -255647000.0,
+            "depreciation_amortization": -74810000.0,
+            "operating_income": 512237000.0,
+            "interest_expense": -9113000.0,
+            "tax_provision": -179602000.0,
+            "net_income": 363135000.0,
+            "net_income_to_parent": 298801000.0,
+            "eps_basic": 0.132,
+            "eps_diluted": 0.132,
+            "shares_basic": 2263643939.0,
+            "shares_diluted": 2263643939.0
+          }
+        ],
+        "balance_sheet": [
+          {
+            "fiscal_year": "2024",
+            "cash_and_equivalents": 2056626000.0,
+            "short_term_investments": 589176000.0,
+            "accounts_receivable": 132922000.0,
+            "inventory": 576326000.0,
+            "total_current_assets": 3556984000.0,
+            "ppe_net": 565676000.0,
+            "goodwill": 1106076000.0,
+            "intangible_assets": 257302000.0,
+            "total_assets": 7017777000.0,
+            "accounts_payable": 667564000.0,
+            "short_term_debt": null,
+            "total_current_liabilities": 1163420000.0,
+            "long_term_debt": null,
+            "total_liabilities": 2025369000.0,
+            "shareholders_equity": 5561154000.0,
+            "minority_interest": 594674000.0
+          },
+          {
+            "fiscal_year": "2023",
+            "cash_and_equivalents": 2295467000.0,
+            "short_term_investments": 776501000.0,
+            "accounts_receivable": 222383000.0,
+            "inventory": 557991000.0,
+            "total_current_assets": 4033561000.0,
+            "ppe_net": 556232000.0,
+            "goodwill": 1129049000.0,
+            "intangible_assets": 309774000.0,
+            "total_assets": 7409601000.0,
+            "accounts_payable": 658344000.0,
+            "short_term_debt": 200000000.0,
+            "total_current_liabilities": 1258186000.0,
+            "long_term_debt": null,
+            "total_liabilities": 2093923000.0,
+            "shareholders_equity": 5920055000.0,
+            "minority_interest": 653809000.0
+          },
+          {
+            "fiscal_year": "2022",
+            "cash_and_equivalents": 1942233000.0,
+            "short_term_investments": 487883000.0,
+            "accounts_receivable": 423116000.0,
+            "inventory": 558958000.0,
+            "total_current_assets": 3456682000.0,
+            "ppe_net": 571861000.0,
+            "goodwill": 1091243000.0,
+            "intangible_assets": 273614000.0,
+            "total_assets": 8815891000.0,
+            "accounts_payable": 699530000.0,
+            "short_term_debt": null,
+            "total_current_liabilities": 1034121000.0,
+            "long_term_debt": null,
+            "total_liabilities": 1701887000.0,
+            "shareholders_equity": 5475758000.0,
+            "minority_interest": 638246000.0
+          },
+          {
+            "fiscal_year": "2021",
+            "cash_and_equivalents": 1075606000.0,
+            "short_term_investments": 965973000.0,
+            "accounts_receivable": 159624000.0,
+            "inventory": 544487000.0,
+            "total_current_assets": 3035954000.0,
+            "ppe_net": 582636000.0,
+            "goodwill": 1048660000.0,
+            "intangible_assets": 266335000.0,
+            "total_assets": 7405450000.0,
+            "accounts_payable": 761339000.0,
+            "short_term_debt": 44460000.0,
+            "total_current_liabilities": 1081187000.0,
+            "long_term_debt": 44140000.0,
+            "total_liabilities": 1733130000.0,
+            "shareholders_equity": 5043440000.0,
+            "minority_interest": 628880000.0
+          },
+          {
+            "fiscal_year": "2020",
+            "cash_and_equivalents": 1234022000.0,
+            "short_term_investments": 982927000.0,
+            "accounts_receivable": 113503000.0,
+            "inventory": 502263000.0,
+            "total_current_assets": 2832715000.0,
+            "ppe_net": 567924000.0,
+            "goodwill": 860637000.0,
+            "intangible_assets": 182626000.0,
+            "total_assets": 5742279000.0,
+            "accounts_payable": 648760000.0,
+            "short_term_debt": 13860000.0,
+            "total_current_liabilities": 1896819000.0,
+            "long_term_debt": 0.0,
+            "total_liabilities": 2497012000.0,
+            "shareholders_equity": 4567881000.0,
+            "minority_interest": 574205000.0
+          },
+          {
+            "fiscal_year": "2025",
+            "cash_and_equivalents": 1649252000.0,
+            "short_term_investments": 311892000.0,
+            "accounts_receivable": 144049000.0,
+            "inventory": 558421000.0,
+            "total_current_assets": 2821318000.0,
+            "ppe_net": 571235000.0,
+            "goodwill": 940923000.0,
+            "intangible_assets": 255046000.0,
+            "total_assets": 7208478000.0,
+            "accounts_payable": 864674000.0,
+            "short_term_debt": 30472000.0,
+            "total_current_liabilities": 1557555000.0,
+            "long_term_debt": 0.0,
+            "total_liabilities": 2372635000.0,
+            "shareholders_equity": 4291235000.0,
+            "minority_interest": 574396000.0
+          }
+        ],
+        "cash_flow": [
+          {
+            "fiscal_year": "2024",
+            "operating_cash_flow": 708532000.0,
+            "capex": 78729000.0,
+            "free_cash_flow": 629803000.0,
+            "dividends_paid": 720353000.0,
+            "buyback_amount": 15478000.0,
+            "debt_issued": null,
+            "debt_repaid": 200000000.0,
+            "acquisitions": 4723000.0
+          },
+          {
+            "fiscal_year": "2023",
+            "operating_cash_flow": 1102878000.0,
+            "capex": 44630000.0,
+            "free_cash_flow": 1058248000.0,
+            "dividends_paid": 347565000.0,
+            "buyback_amount": null,
+            "debt_issued": 200000000.0,
+            "debt_repaid": null,
+            "acquisitions": 119049000.0
+          },
+          {
+            "fiscal_year": "2022",
+            "operating_cash_flow": 852933000.0,
+            "capex": 85068000.0,
+            "free_cash_flow": 767865000.0,
+            "dividends_paid": 230159000.0,
+            "buyback_amount": null,
+            "debt_issued": null,
+            "debt_repaid": 530000.0,
+            "acquisitions": 82142000.0
+          },
+          {
+            "fiscal_year": "2021",
+            "operating_cash_flow": 992369000.0,
+            "capex": 123181000.0,
+            "free_cash_flow": 869188000.0,
+            "dividends_paid": 214346000.0,
+            "buyback_amount": 71958000.0,
+            "debt_issued": 5000000.0,
+            "debt_repaid": 54360000.0,
+            "acquisitions": 99224000.0
+          },
+          {
+            "fiscal_year": "2020",
+            "operating_cash_flow": 822349000.0,
+            "capex": 106418000.0,
+            "free_cash_flow": 715931000.0,
+            "dividends_paid": 155484000.0,
+            "buyback_amount": 187711000.0,
+            "debt_issued": 0.0,
+            "debt_repaid": 42500000.0,
+            "acquisitions": 484312000.0
+          },
+          {
+            "fiscal_year": "2025",
+            "operating_cash_flow": 56940000.0,
+            "capex": 72197000.0,
+            "free_cash_flow": -15257000.0,
+            "dividends_paid": 561367000.0,
+            "buyback_amount": null,
+            "debt_issued": null,
+            "debt_repaid": 4405000.0,
+            "acquisitions": 476000.0
+          }
+        ],
+        "segments": [
+          {
+            "fiscal_year": "2024",
+            "segment_name": "Burial services",
+            "revenue": 1787708000.0,
+            "operating_income": 830349000.0,
+            "assets": null,
+            "extra": null
+          },
+          {
+            "fiscal_year": "2024",
+            "segment_name": "Funeral services",
+            "revenue": 290074000.0,
+            "operating_income": 122387000.0,
+            "assets": null,
+            "extra": null
+          },
+          {
+            "fiscal_year": "2024",
+            "segment_name": "Others",
+            "revenue": 1700000.0,
+            "operating_income": null,
+            "assets": null,
+            "extra": null
+          },
+          {
+            "fiscal_year": "2023",
+            "segment_name": "Burial services",
+            "revenue": 2298107000.0,
+            "operating_income": 1258936000.0,
+            "assets": null,
+            "extra": null
+          },
+          {
+            "fiscal_year": "2023",
+            "segment_name": "Funeral services",
+            "revenue": 329922000.0,
+            "operating_income": 114463000.0,
+            "assets": null,
+            "extra": null
+          },
+          {
+            "fiscal_year": "2023",
+            "segment_name": "Others",
+            "revenue": null,
+            "operating_income": null,
+            "assets": null,
+            "extra": null
+          },
+          {
+            "fiscal_year": "2023",
+            "segment_name": "Burial Services",
+            "revenue": null,
+            "operating_income": null,
+            "assets": null,
+            "extra": {
+              "revenue_note": "Main segment - sale of burial plots and cemetery maintenance"
+            }
+          },
+          {
+            "fiscal_year": "2022",
+            "segment_name": "Burial Services",
+            "revenue": null,
+            "operating_income": null,
+            "assets": null,
+            "extra": {
+              "revenue_note": "Main segment - sale of burial plots and cemetery maintenance"
+            }
+          },
+          {
+            "fiscal_year": "2023",
+            "segment_name": "Funeral Services",
+            "revenue": null,
+            "operating_income": null,
+            "assets": null,
+            "extra": {
+              "revenue_note": "Funeral arrangement and hosting services"
+            }
+          },
+          {
+            "fiscal_year": "2022",
+            "segment_name": "Funeral Services",
+            "revenue": null,
+            "operating_income": null,
+            "assets": null,
+            "extra": {
+              "revenue_note": "Funeral arrangement and hosting services"
+            }
+          },
+          {
+            "fiscal_year": "2023",
+            "segment_name": "Other Services",
+            "revenue": null,
+            "operating_income": null,
+            "assets": null,
+            "extra": {
+              "revenue_note": "Landscape design, construction, cremation machines"
+            }
+          },
+          {
+            "fiscal_year": "2022",
+            "segment_name": "Other Services",
+            "revenue": null,
+            "operating_income": null,
+            "assets": null,
+            "extra": {
+              "revenue_note": "Landscape design, construction, cremation machines"
+            }
+          },
+          {
+            "fiscal_year": "2023",
+            "segment_name": "Total",
+            "revenue": 2628029000.0,
+            "operating_income": null,
+            "assets": null,
+            "extra": null
+          },
+          {
+            "fiscal_year": "2022",
+            "segment_name": "Total",
+            "revenue": 2171626000.0,
+            "operating_income": null,
+            "assets": null,
+            "extra": null
+          },
+          {
+            "fiscal_year": "2022",
+            "segment_name": "Burial services",
+            "revenue": null,
+            "operating_income": null,
+            "assets": null,
+            "extra": null
+          },
+          {
+            "fiscal_year": "2021",
+            "segment_name": "Burial services",
+            "revenue": null,
+            "operating_income": null,
+            "assets": null,
+            "extra": null
+          },
+          {
+            "fiscal_year": "2022",
+            "segment_name": "Funeral services",
+            "revenue": null,
+            "operating_income": null,
+            "assets": null,
+            "extra": null
+          },
+          {
+            "fiscal_year": "2021",
+            "segment_name": "Funeral services",
+            "revenue": null,
+            "operating_income": null,
+            "assets": null,
+            "extra": null
+          },
+          {
+            "fiscal_year": "2022",
+            "segment_name": "Others services",
+            "revenue": null,
+            "operating_income": null,
+            "assets": null,
+            "extra": null
+          },
+          {
+            "fiscal_year": "2021",
+            "segment_name": "Others services",
+            "revenue": null,
+            "operating_income": null,
+            "assets": null,
+            "extra": null
+          },
+          {
+            "fiscal_year": "2021",
+            "segment_name": "Burial Services",
+            "revenue": 1772448000.0,
+            "operating_income": 889684000.0,
+            "assets": null,
+            "extra": null
+          },
+          {
+            "fiscal_year": "2021",
+            "segment_name": "Funeral Services",
+            "revenue": 385044000.0,
+            "operating_income": 193002000.0,
+            "assets": null,
+            "extra": null
+          },
+          {
+            "fiscal_year": "2021",
+            "segment_name": "Others",
+            "revenue": 168356000.0,
+            "operating_income": null,
+            "assets": null,
+            "extra": null
+          },
+          {
+            "fiscal_year": "2020",
+            "segment_name": "Burial Services",
+            "revenue": 1460500000.0,
+            "operating_income": 733500000.0,
+            "assets": null,
+            "extra": null
+          },
+          {
+            "fiscal_year": "2020",
+            "segment_name": "Funeral Services",
+            "revenue": 290800000.0,
+            "operating_income": 145400000.0,
+            "assets": null,
+            "extra": null
+          },
+          {
+            "fiscal_year": "2020",
+            "segment_name": "Others",
+            "revenue": 141237000.0,
+            "operating_income": null,
+            "assets": null,
+            "extra": null
+          },
+          {
+            "fiscal_year": "2025",
+            "segment_name": "Burial services",
+            "revenue": 477375000.0,
+            "operating_income": -214162000.0,
+            "assets": null,
+            "extra": null
+          },
+          {
+            "fiscal_year": "2025",
+            "segment_name": "Funeral services",
+            "revenue": 121873000.0,
+            "operating_income": -5310000.0,
+            "assets": null,
+            "extra": null
+          },
+          {
+            "fiscal_year": "2025",
+            "segment_name": "Other services",
+            "revenue": 11602000.0,
+            "operating_income": -10179000.0,
+            "assets": null,
+            "extra": null
+          },
+          {
+            "fiscal_year": "2024",
+            "segment_name": "Other services",
+            "revenue": 9826000.0,
+            "operating_income": -6660000.0,
+            "assets": null,
+            "extra": null
+          }
+        ],
+        "accounting_policies": [
+          {
+            "category": "Basis of Preparation",
+            "fiscal_year": "2024",
+            "method": "IFRS Accounting Standards as issued by IASB; HKEX Listing Rules and Hong Kong Companies Ordinance disclosures",
+            "raw_text": "The consolidated financial statements have been prepared in accordance with IFRS Accounting Standards issued by International Accounting Standards Board. For the purpose of preparation of the consolidated financial statements, information is considered material if such information is reasonably expected to influence decisions made by primary users. In addition, the consolidated financial statements include applicable disclosures required by the Rules Governing the Listing of Securities on The Stock Exchange and by the Hong Kong Companies Ordinance.",
+            "changed_from_prior": false,
+            "change_description": null
+          },
+          {
+            "category": "Revenue Recognition",
+            "fiscal_year": "2024",
+            "method": "IFRS 15 five-step model: identify contract, identify performance obligations, determine transaction price, allocate transaction price, recognize revenue when/obtaining control",
+            "raw_text": "Revenue from contracts with customers. Information about the Group's accounting policies relating to revenue from contracts with customers is provided in Notes 5 and 28. Performance obligations for contracts with customers and revenue recognition policies — see detailed note in segment information section.",
+            "changed_from_prior": false,
+            "change_description": null
+          },
+          {
+            "category": "Basis of Preparation",
+            "fiscal_year": "2023",
+            "method": "IFRS",
+            "raw_text": "The consolidated financial statements have been prepared in accordance with IFRSs issued by IASB.",
+            "changed_from_prior": false,
+            "change_description": null
+          },
+          {
+            "category": "Impairment - Asset Testing",
+            "fiscal_year": "2023",
+            "method": "Recoverable amount = higher of fair value less costs of disposal and value in use",
+            "raw_text": "Recoverable amount is the higher of fair value less costs of disposal and value in use. In assessing value in use, the estimated future cash flows are discounted to their present value using a pre-tax discount rate that reflects current market assessments of the time value of money and the risks specific to the asset.",
+            "changed_from_prior": false,
+            "change_description": null
+          },
+          {
+            "category": "Revenue Recognition",
+            "fiscal_year": "2023",
+            "method": "Point in time and over time",
+            "raw_text": "Revenue from contracts with customers is recognized when control of the goods or services is transferred to the customer at an amount that reflects the consideration to which the Group expects to be entitled in exchange for those goods or services.",
+            "changed_from_prior": false,
+            "change_description": null
+          },
+          {
+            "category": "Basis of Preparation",
+            "fiscal_year": "2022",
+            "method": "Historical cost basis except for certain properties and financial instruments measured at fair value",
+            "raw_text": "The consolidated financial statements have been prepared in accordance with IFRSs issued by IASB. The consolidated financial statements have been prepared on the historical cost basis except for certain properties and financial instruments that are measured at fair values at the end of each reporting period.",
+            "changed_from_prior": false,
+            "change_description": null
+          },
+          {
+            "category": "Revenue Recognition",
+            "fiscal_year": "2022",
+            "method": "IFRS 15 - Performance obligation satisfied over time or at a point in time",
+            "raw_text": "The Group recognizes revenue when (or as) a performance obligation is satisfied, i.e. when 'control' of the goods or services underlying the particular performance obligations is transferred to the customer. Revenue is recognized over time if one of the criteria met: (1) customer simultaneously receives and consumes benefits, (2) Group's performance creates or enhances an asset that the customer controls, or (3) Group's performance does not create an asset with alternative use and has enforceable right to payment. Otherwise, revenue is recognized at a point in time.",
+            "changed_from_prior": false,
+            "change_description": null
+          },
+          {
+            "category": "Basis of Preparation",
+            "fiscal_year": "2021",
+            "method": "IFRS",
+            "raw_text": "The consolidated financial statements have been prepared in accordance with IFRSs issued by the IASB. For the purpose of preparation of the consolidated financial statements, information is considered material if such information is reasonably expected to influence decisions made by primary users. In addition, the consolidated financial statements include applicable disclosures required by the Rules Governing the Listing of Securities on The Stock Exchange and by the Hong Kong Companies Ordinance. The consolidated financial statements have been prepared on the historical cost basis except for certain properties and financial instruments that are measured at fair values at the end of each reporting period.",
+            "changed_from_prior": false,
+            "change_description": null
+          },
+          {
+            "category": "Fair Value Measurement",
+            "fiscal_year": "2021",
+            "method": "Fair value hierarchy (Level 1, 2, 3)",
+            "raw_text": "Fair value measurements are categorized into Level 1, 2 or 3 based on the degree to which the inputs to the fair value measurements are observable and the significance of the inputs to the fair value measurement in its entirety. Level 1 inputs are quoted prices (unadjusted) in active markets for identical assets or liabilities that the entity can access at the measurement date; Level 2 inputs are inputs, other than quoted prices included within Level 1, that are observable for the asset or liability, either directly or indirectly; and Level 3 inputs are unobservable inputs for the asset or liability.",
+            "changed_from_prior": false,
+            "change_description": null
+          },
+          {
+            "category": "Revenue Recognition",
+            "fiscal_year": "2021",
+            "method": "IFRS 15 — over time and point in time",
+            "raw_text": "The Group recognizes revenue when (or as) a performance obligation is satisfied, i.e. when control of the goods or services underlying the particular performance obligations is transferred to the customer. Control is transferred over time and revenue is recognized over time if one of the following criteria is met: the customer simultaneously receives and consumes the benefits provided by the Group's performance as the Group performs; the Group's performance creates or enhances an asset that the customer controls as the Group performs; or the Group's performance does not create an asset with an alternative use to the Group and the Group has an enforceable right to payment for performance completed to date. Otherwise, revenue is recognized at a point in time.",
+            "changed_from_prior": false,
+            "change_description": null
+          },
+          {
+            "category": "Basis of Preparation",
+            "fiscal_year": "2025",
+            "method": "IAS 34 - Interim Financial Reporting",
+            "raw_text": "The condensed consolidated financial statements have been prepared in accordance with International Accounting Standard 34 (IAS 34) \"Interim Financial Reporting\" issued by the International Accounting Standards Board as well as with the applicable disclosure requirements of the Rules Governing the Listing of Securities on the Stock Exchange.",
+            "changed_from_prior": false,
+            "change_description": null
+          }
+        ],
+        "debt_schedule": [
+          {
+            "instrument_type": "Unsecured bank loan (fixed-rate)",
+            "principal": 200000000.0,
+            "interest_rate": 0.055,
+            "maturity_date": "2024-10-23",
+            "covenants": [],
+            "ranking": "Unsecured"
+          },
+          {
+            "instrument_type": "Loans from non-controlling shareholders of subsidiaries (current)",
+            "principal": 30466000.0,
+            "interest_rate": null,
+            "maturity_date": null,
+            "covenants": [],
+            "ranking": "Subordinated"
+          },
+          {
+            "instrument_type": "Loans from non-controlling shareholders of subsidiaries (non-current)",
+            "principal": null,
+            "interest_rate": null,
+            "maturity_date": null,
+            "covenants": [],
+            "ranking": "Subordinated"
+          },
+          {
+            "instrument_type": "Unsecured Bank Loan",
+            "principal": 200000000.0,
+            "interest_rate": 0.055,
+            "maturity_date": "2024-10-23",
+            "covenants": [],
+            "ranking": "Senior Unsecured"
+          },
+          {
+            "instrument_type": "Lease liabilities (current)",
+            "principal": 25239000.0,
+            "interest_rate": null,
+            "maturity_date": null,
+            "covenants": [],
+            "ranking": "Secured"
+          },
+          {
+            "instrument_type": "Lease liabilities (non-current)",
+            "principal": 39464000.0,
+            "interest_rate": null,
+            "maturity_date": null,
+            "covenants": [],
+            "ranking": "Secured"
+          },
+          {
+            "instrument_type": "Loans from non-controlling shareholders of subsidiaries (current)",
+            "principal": 32958000.0,
+            "interest_rate": 0.0435,
+            "maturity_date": "Within one year from extension date (2022)",
+            "covenants": [],
+            "ranking": "Subordinated"
+          },
+          {
+            "instrument_type": "Bank borrowings",
+            "principal": 0.0,
+            "interest_rate": null,
+            "maturity_date": null,
+            "covenants": [],
+            "ranking": null
+          },
+          {
+            "instrument_type": "Variable-rate bank borrowings",
+            "principal": 0.0,
+            "interest_rate": null,
+            "maturity_date": null,
+            "covenants": [],
+            "ranking": "Secured by the Group's equity interest in a subsidiary"
+          },
+          {
+            "instrument_type": "Variable-rate bank borrowings (2020 comparative)",
+            "principal": 13860000.0,
+            "interest_rate": 0.0435,
+            "maturity_date": "Within one year",
+            "covenants": [],
+            "ranking": "Secured by the Group's equity interest in a subsidiary"
+          }
+        ],
+        "covenant_status": [
+          {
+            "covenant_type": "Bank loan compliance",
+            "threshold": "No covenant breach",
+            "current_value": "No borrowings outstanding at 31/12/2024; prior loan fully repaid at maturity",
+            "headroom": "N/A — loan matured and repaid",
+            "in_compliance": true
+          }
+        ],
+        "special_items": [
+          {
+            "fiscal_year": "2024",
+            "description": "Impairment losses recognized on property and equipment, intangible assets, cemetery assets and goodwill",
+            "pre_tax_amount": 104193000.0,
+            "classification": "Impairment",
+            "recurrence": "Non-recurring"
+          },
+          {
+            "fiscal_year": "2024",
+            "description": "Impairment losses under expected credit loss (ECL) model, net of reversal",
+            "pre_tax_amount": -23585000.0,
+            "classification": "ECL impairment",
+            "recurrence": "Non-recurring"
+          },
+          {
+            "fiscal_year": "2022",
+            "description": "Gain on fair value changes of financial assets at FVTPL",
+            "pre_tax_amount": 30574000.0,
+            "classification": "Investment income",
+            "recurrence": "Non-recurring"
+          },
+          {
+            "fiscal_year": "2021",
+            "description": "Gain on fair value changes of financial assets at FVTPL",
+            "pre_tax_amount": 27966000.0,
+            "classification": "Investment income",
+            "recurrence": "Non-recurring"
+          },
+          {
+            "fiscal_year": "2022",
+            "description": "Investment income from acquisition of subsidiary",
+            "pre_tax_amount": 9242000.0,
+            "classification": "Investment income",
+            "recurrence": "Non-recurring"
+          },
+          {
+            "fiscal_year": "2021",
+            "description": "Investment income from acquisition of subsidiary",
+            "pre_tax_amount": 0.0,
+            "classification": "Investment income",
+            "recurrence": "Non-recurring"
+          },
+          {
+            "fiscal_year": "2022",
+            "description": "Net loss on disposal of property and equipment",
+            "pre_tax_amount": -47000.0,
+            "classification": "Other gains/losses",
+            "recurrence": "Non-recurring"
+          },
+          {
+            "fiscal_year": "2021",
+            "description": "Net loss on disposal of property and equipment",
+            "pre_tax_amount": -572000.0,
+            "classification": "Other gains/losses",
+            "recurrence": "Non-recurring"
+          },
+          {
+            "fiscal_year": "2022",
+            "description": "Impairment losses under ECL model, net of reversal",
+            "pre_tax_amount": -1238000.0,
+            "classification": "Credit impairment",
+            "recurrence": "Non-recurring"
+          },
+          {
+            "fiscal_year": "2021",
+            "description": "Impairment losses under ECL model, net of reversal",
+            "pre_tax_amount": -3821000.0,
+            "classification": "Credit impairment",
+            "recurrence": "Non-recurring"
+          },
+          {
+            "fiscal_year": "2020",
+            "description": "Bargain purchase gain from acquisition",
+            "pre_tax_amount": 204000.0,
+            "classification": "Acquisition-related",
+            "recurrence": "Non-recurring"
+          },
+          {
+            "fiscal_year": "2021",
+            "description": "Impairment losses under expected credit loss model, net of reversal",
+            "pre_tax_amount": 3821000.0,
+            "classification": "Impairment",
+            "recurrence": "Non-recurring"
+          },
+          {
+            "fiscal_year": "2020",
+            "description": "Expense recognized in respect of share-based compensation",
+            "pre_tax_amount": 1607000.0,
+            "classification": "Share-based compensation",
+            "recurrence": "Non-recurring"
+          },
+          {
+            "fiscal_year": "2025",
+            "description": "Impairment losses recognised on property, plant and equipment, cemetery assets, intangible assets and goodwill",
+            "pre_tax_amount": -217638000.0,
+            "classification": "Impairment",
+            "recurrence": "Non-recurring"
+          },
+          {
+            "fiscal_year": "2025",
+            "description": "Impairment losses under expected credit loss model, net of reversal",
+            "pre_tax_amount": -2684000.0,
+            "classification": "Impairment",
+            "recurrence": "Non-recurring"
+          },
+          {
+            "fiscal_year": "2024",
+            "description": "Impairment losses under expected credit loss model, net of reversal",
+            "pre_tax_amount": -14323000.0,
+            "classification": "Impairment",
+            "recurrence": "Non-recurring"
+          }
+        ],
+        "concentration": {
+          "top_customer_pct": null,
+          "top5_customers_pct": null,
+          "customer_losses": [],
+          "major_supplier_dependencies": [],
+          "top5_suppliers_pct": null,
+          "geographic_revenue_split": {}
+        },
+        "buyback_history": [
+          {
+            "fiscal_year": "2024",
+            "amount_spent": 15478000.0,
+            "shares_retired": null,
+            "avg_price_paid": null
+          },
+          {
+            "fiscal_year": "2023",
+            "amount_spent": null,
+            "shares_retired": null,
+            "avg_price_paid": null
+          },
+          {
+            "fiscal_year": "2022",
+            "amount_spent": 1919000.0,
+            "shares_retired": null,
+            "avg_price_paid": null
+          },
+          {
+            "fiscal_year": "2021",
+            "amount_spent": 71958000.0,
+            "shares_retired": null,
+            "avg_price_paid": null
+          },
+          {
+            "fiscal_year": "2020",
+            "amount_spent": 187711000.0,
+            "shares_retired": null,
+            "avg_price_paid": null
+          }
+        ],
+        "acquisition_history": [
+          {
+            "fiscal_year": "2024",
+            "target": "Zhuolu Longhui Tianfu Yuanbaoshan Development Management Co., Ltd. (increased stake from 51% to 70%)",
+            "purchase_price": 16470000.0,
+            "goodwill_recognized": null,
+            "impairment_charges": null
+          },
+          {
+            "fiscal_year": "2024",
+            "target": "VR Paradise Holdings Limited (newly established joint venture, 60% owned)",
+            "purchase_price": 10961000.0,
+            "goodwill_recognized": null,
+            "impairment_charges": null
+          },
+          {
+            "fiscal_year": "2023",
+            "target": null,
+            "purchase_price": 74419000.0,
+            "goodwill_recognized": null,
+            "impairment_charges": null
+          },
+          {
+            "fiscal_year": "2022",
+            "target": null,
+            "purchase_price": 82142000.0,
+            "goodwill_recognized": null,
+            "impairment_charges": null
+          },
+          {
+            "fiscal_year": "2022",
+            "target": "Subsidiaries (Note 34)",
+            "purchase_price": null,
+            "goodwill_recognized": null,
+            "impairment_charges": null
+          },
+          {
+            "fiscal_year": "2021",
+            "target": "Subsidiaries",
+            "purchase_price": null,
+            "goodwill_recognized": null,
+            "impairment_charges": null
+          },
+          {
+            "fiscal_year": "2021",
+            "target": null,
+            "purchase_price": null,
+            "goodwill_recognized": null,
+            "impairment_charges": null
+          },
+          {
+            "fiscal_year": "2020",
+            "target": null,
+            "purchase_price": 484312000.0,
+            "goodwill_recognized": null,
+            "impairment_charges": 0.0
+          }
+        ],
+        "dividend_per_share_history": [
+          {
+            "Dividend per share (RMB cents)": null,
+            "Dividends recognized as distributions (RMB'000)": 735831.0,
+            "Total dividends to owners (RMB'000)": 720353.0,
+            "fiscal_year": "2024"
+          },
+          {
+            "Dividend per share (RMB cents)": null,
+            "Dividends recognized as distributions (RMB'000)": 355033.0,
+            "Total dividends to owners (RMB'000)": 347565.0,
+            "fiscal_year": "2023"
+          },
+          {
+            "2022": 0.1064,
+            "2023": 0.1641,
+            "note": "Calculated from dividends paid to owners / share capital (142,148 thousand shares). Actual payout may vary based on exact share count."
+          },
+          {
+            "2022": 0.1011
+          },
+          {
+            "2021": 0.0934
+          },
+          {
+            "2021": "214346000"
+          },
+          {
+            "2020": "155484000"
+          },
+          {
+            "amount_paid_total": 561367000.0,
+            "dps_hkd": null,
+            "fiscal_year": "2025"
+          },
+          {
+            "amount_paid_total": 142194000.0,
+            "dps_hkd": null,
+            "fiscal_year": "2024"
+          }
+        ],
+        "footnote_extracts": [
+          {
+            "topic": "Related Party — Connected Transaction",
+            "fiscal_year": "2024",
+            "raw_text": "Chongqing Guolong Agricultural Science and Technology Development Co. Ltd. (重庆国隆农业科技发展有限公司) (Chongqing Guolong) and Xiyuan Fu Shou Yuan entered into a loan agreement on November 28, 2017, pursuant to which Chongqing Guolong provided a shareholder loan to Xiyuan Fu Shou Yuan. The loan were extended in 2024 and they are due within one year from the extension date. As at December 31, 2024, the loan remaining outstanding amounted to approximately RMB18.52 million. The interest rate is approximately 4.35% per annum. Chongqing Guolong is a connected person of the Company at subsidiary level as it is a substantial shareholder of Xiyuan Fu Shou Yuan and owns 49% equity interest in Xiyuan Fu Shou Yuan. The Loan constituted a continuing connected transaction.",
+            "structured_summary": "Connected party loan from Chongqing Guolong (49% shareholder of Xiyuan Fu Shou Yuan subsidiary) outstanding at RMB 18.52 million as at 31/12/2024, at 4.35% p.a., extended in 2024 and due within one year. Exempt from reporting/announcement requirements under Rule 14A.90."
+          },
+          {
+            "topic": "Borrowings",
+            "fiscal_year": "2024",
+            "raw_text": "As at December 31, 2024, the Group did not have any bank borrowings (December 31, 2023: RMB200 million). Fixed-rate borrowings: October 23, 2024, 5.50%, Unsecured bank loan — carrying amount at 31/12/2023: RMB 200,000,000.",
+            "structured_summary": "Bank loan of RMB 200 million at 5.50% matured and was fully repaid on October 23, 2024. No bank borrowings outstanding as at 31/12/2024."
+          },
+          {
+            "topic": "Capital Risk Management",
+            "fiscal_year": "2024",
+            "raw_text": "The Group manages its capital to ensure that entities in the Group will be able to continue as a going concern while maximizing the return to shareholders through the optimization of the debt and equity balance. The capital structure of the Group consists of net debt, which mainly includes borrowings, loans from non-controlling shareholders of subsidiaries, lease liabilities, other long-term liabilities, net of restricted deposits, time deposits, bank balances and cash, and equity attributable to owners of the Company, comprising share capital, retained profits, other reserves and non-controlling interests.",
+            "structured_summary": "Capital structure comprises net debt (borrowings, loans from NCI, lease liabilities, other long-term liabilities net of restricted/time deposits and cash) plus equity. The Group balances debt and equity through dividends, new share issues, buybacks, and debt issuance/repayment."
+          },
+          {
+            "topic": "Customer Concentration",
+            "fiscal_year": "2024",
+            "raw_text": "No single customer accounted for 10% or more of the Group's revenue during the years ended December 31, 2024 and 2023.",
+            "structured_summary": "No customer concentration risk; no single customer ≥10% of revenue in either 2024 or 2023."
+          },
+          {
+            "topic": "Related Party Transaction",
+            "fiscal_year": "2023",
+            "raw_text": "Chongqing Guolong Agricultural Science and Technology Development Co. Ltd. and Xiyuan Fu Shou Yuan entered into a loan agreement on November 28, 2017. The loan was extended in 2022 and is due within one year. As at December 31, 2023, the loan remaining outstanding amounted to approximately RMB18.13 million. The interest rate is approximately 4.35% per annum.",
+            "structured_summary": "Related party loan of RMB 18.13 million at 4.35% interest, due within one year from extension date."
+          },
+          {
+            "topic": "Capital Risk Management",
+            "fiscal_year": "2023",
+            "raw_text": "The capital structure of the Group consists of net debt, which mainly includes loans from non-controlling shareholders of subsidiaries, lease liabilities, borrowings, other long-term liabilities, net of restricted deposits, time deposits, bank balances and cash, and equity attributable to owners of the Company, comprising share capital, retained profits and other reserves.",
+            "structured_summary": "Capital structure: Net debt (loans from NCI, lease liabilities, borrowings, other LT liabilities, less restricted/time deposits and cash) + Equity (share capital, retained profits, other reserves)."
+          },
+          {
+            "topic": "Related party loan",
+            "fiscal_year": "2022",
+            "raw_text": "Chongqing Guolong Agricultural Science and Technology Development Co. Ltd. and Xiyuan Fu Shou Yuan entered into a loan agreement on November 28, 2017, pursuant to which Chongqing Guolong provided a shareholder loan to Xiyuan Fu Shou Yuan. The loan was extended in 2022 and is due within one year from the extension date. As at December 31, 2022, the loan remaining outstanding amounted to approximately RMB23.0 million. The interest rate is approximately 4.35% per annum.",
+            "structured_summary": "Related party loan from Chongqing Guolong to Xiyuan Fu Shou Yuan of RMB 23.0 million at 4.35% p.a., extended in 2022, due within one year."
+          },
+          {
+            "topic": "Revenue disaggregation",
+            "fiscal_year": "2022",
+            "raw_text": "Geographical markets: Mainland China RMB 2,154,712,000 (2021: RMB 2,325,848,000); Overseas RMB 16,914,000 (2021: Nil). Timing of revenue recognition: Point in time RMB 2,107,968,000 (2021: RMB 2,232,447,000); Over time RMB 63,658,000 (2021: RMB 93,401,000).",
+            "structured_summary": "Revenue split: Mainland China 99.2% / Overseas 0.8% (2022). Point-in-time recognition 97.1%, over-time 2.9%."
+          },
+          {
+            "topic": "Capital risk management",
+            "fiscal_year": "2022",
+            "raw_text": "The capital structure of the Group consists of net debt, which mainly includes loans from non-controlling shareholders of subsidiaries, lease liabilities, other long-term liabilities, net of restricted deposits, time deposits, bank balances and cash, and equity attributable to owners of the Company, comprising share capital, retained profits and other reserves.",
+            "structured_summary": "Capital structure comprises net debt (loans from NCI, lease liabilities, other long-term liabilities, net of deposits/time deposits/cash) plus equity attributable to owners."
+          },
+          {
+            "topic": "Related Party Transaction — Loan from Non-controlling Shareholder",
+            "fiscal_year": "2021",
+            "raw_text": "Chongqing Guolong Agricultural Science and Technology Development Co. Ltd. (重慶國隆農業科技發展有限公司) and Xiyuan Fu Shou Yuan entered into a loan agreement on November 28, 2017, pursuant to which Chongqing Guolong provided a shareholder loan to Xiyuan Fu Shou Yuan. As at December 31, 2021, the loan remaining outstanding amounted to approximately RMB27.0 million. The interest rate is approximately 4.35% per annum.",
+            "structured_summary": "A shareholder loan of ~RMB 27.0 million remained outstanding as at Dec 31, 2021, bearing interest at ~4.35% p.a. The lender is Chongqing Guolong Agricultural Science and Technology Development Co. Ltd."
+          },
+          {
+            "topic": "Customer Concentration",
+            "fiscal_year": "2021",
+            "raw_text": "No single customer accounted for 10% or more of the Group's revenue during the years ended December 31, 2021 and 2020.",
+            "structured_summary": "No major customer concentration risk; no single customer represents ≥10% of revenue in either 2021 or 2020."
+          },
+          {
+            "topic": "Business Combination — Bargain Purchase",
+            "fiscal_year": "2020",
+            "raw_text": "Bargain purchase gain from acquisition: RMB 204,000",
+            "structured_summary": "The Group recognized a bargain purchase gain of RMB 204,000 from an acquisition completed in 2020."
+          },
+          {
+            "topic": "Capital Risk Management",
+            "fiscal_year": "2021",
+            "raw_text": "The capital structure of the Group consists of net debt, which mainly includes borrowings and loans from non-controlling shareholders of subsidiaries, lease liabilities, other long-term liabilities, net of restricted deposits, time deposits, bank balances and cash, and equity attributable to owners of the Company, comprising share capital, retained profits and other reserves.",
+            "structured_summary": "Net debt = borrowings + NCI loans + lease liabilities + other long-term liabilities − (restricted deposits + time deposits + bank balances and cash). Capital structure managed via dividends, new share issues, buybacks, and debt issuance/redemption."
+          },
+          {
+            "topic": "Related Party Transactions",
+            "fiscal_year": "2025",
+            "raw_text": "Note 28 - Related Party Transactions: [Data not provided in source text]",
+            "structured_summary": "Related party transaction details not available in source"
+          },
+          {
+            "topic": "Revenue Recognition",
+            "fiscal_year": "2025",
+            "raw_text": "Note 4A - Revenue from Contracts with Customers: [Data not provided in source text]",
+            "structured_summary": "Revenue recognition policy details not available in source"
+          }
+        ],
+        "risk_factors": [
+          {
+            "category": "Regulatory / Industry",
+            "description": "Strict government regulation of China's death care industry with restrictions on licenses and land supply posing risks on business expansion.",
+            "raw_text": "The death care industry in China, subject to the strict requirement of relevant regulations imposed by the government, is a highly regulated industry. There are strict restrictions on licenses and land supply which pose risks and uncertainties on the Group's business expansion.",
+            "materiality": "High"
+          },
+          {
+            "category": "Operational / Modernization",
+            "description": "Traditional operation model of China's death care industry facing innovation challenges and evolving regulations.",
+            "raw_text": "As the death care industry in China is originated from a long cultural history, it features a geographically distinctive and traditional operation model. The conventions of such industry are now facing challenging innovation and the maturity of relevant regulations remains to be seen while the world keeps progressing and updating. In a leading position of China's death care industry, the Group is committed to leading the modernization reform of the death care business in China so as to reduce the risk arising from outdated regulations for the industry.",
+            "materiality": "Medium"
+          },
+          {
+            "category": "Internal Control",
+            "description": "Management of capital structure and optimization of debt/equity balance through dividends, share issues/buybacks, and debt management.",
+            "raw_text": "The Group manages its capital to ensure that entities in the Group will be able to continue as a going concern while maximizing the return to shareholders through the optimization of the debt and equity balance. The Group will balance its overall capital structure through the payment of dividends, new share issues and share buy-backs as well as the issue of new debt or the redemption of existing debts.",
+            "materiality": "Low"
+          },
+          {
+            "category": "Financial Risk",
+            "description": "Exposure to market risk (currency, interest rate, price risk), credit risk, and liquidity risk through financial instruments including restricted deposits, time deposits, bank balances, trade receivables, borrowings, and lease liabilities.",
+            "raw_text": "The Group's major financial instruments include restricted deposits, time deposits, bank balances and cash, trade and other receivables, other long-term assets, financial assets at FVTPL, trade and other payables, borrowings, loans from non-controlling shareholders of subsidiaries, dividends payable, lease liabilities and other long-term liabilities. The risks associated with these financial instruments include market risk (currency risk, interest rate risk and other price risk), credit risk and liquidity risk.",
+            "materiality": "Medium"
+          },
+          {
+            "category": "Regulatory",
+            "description": "Strict government regulations on licenses and land supply in China's death care industry pose risks and uncertainties on business expansion.",
+            "raw_text": "The death care industry in China, subject to the strict requirement of relevant regulations imposed by the government, is a highly regulated industry. There are strict restrictions on licenses and land supply which pose risks and uncertainties on the Group's business expansion.",
+            "materiality": "High"
+          },
+          {
+            "category": "Industry Modernization",
+            "description": "China's death care industry faces challenges from innovation and evolving regulations while maintaining traditional operation models.",
+            "raw_text": "The death care industry in China is originated from a long cultural history, it features a geographically distinctive and traditional operation model. The conventions of such industry are now facing challenging innovation and the maturity of relevant regulations remains to be seen while the world keeps progressing and updating.",
+            "materiality": "Medium"
+          },
+          {
+            "category": "Internal Control",
+            "description": "Management's commitment to maintaining effective internal control systems for risk management and safeguarding company assets.",
+            "raw_text": "The Board is responsible for maintaining an effective internal control system to safeguard the Group's assets and shareholders' interests, and regularly conducts review and on-going monitoring on the risk management and internal control system to ensure the effectiveness of the implementation of the internal control system.",
+            "materiality": "Operational"
+          },
+          {
+            "category": "Regulatory risk",
+            "description": "The death care industry in China is a highly regulated industry subject to strict requirements under relevant regulations imposed by the government. There are strict restrictions on licenses and land supply which pose risks and uncertainties on the Group's business expansion. The maturity of relevant regulations remains to be seen while the world keeps progressing and updating.",
+            "raw_text": "The death care industry in China, subject to the strict requirement of relevant regulations imposed by the government, is a highly regulated industry. There are strict restrictions on licenses and land supply which pose risks and uncertainties on the Group's business expansion.",
+            "materiality": "High"
+          },
+          {
+            "category": "M&A execution risk",
+            "description": "One of the important strategies of the Group is to accomplish business expansion through mergers and acquisitions. Success depends on: whether acquired targets have any hidden debts and unknown potential litigations, whether we can integrate the acquired targets properly and enhance their value added, and whether there are sufficient skilled and qualified managerial personnel.",
+            "raw_text": "One of the important strategies of the Group is to accomplish business expansion through mergers and acquisitions. However, the success of such strategy depends on a number of uncertainties, which mainly include: whether the acquired targets have any hidden debts and unknown potential litigations, whether we can integrate the acquired targets properly and enhance their value added, and whether there are sufficient skilled and qualified managerial personnel to satisfy the market needs during our expansion.",
+            "materiality": "Medium"
+          },
+          {
+            "category": "Internal control",
+            "description": "The Group's internal control systems are designed to manage rather than eliminate the risk of failure to achieve business objectives, and can only provide reasonable and not absolute assurance against material misstatement or loss.",
+            "raw_text": "Such systems are designed to manage rather than eliminate the risk of failure to achieve business objectives, and can only provide reasonable and not absolute assurance against material misstatement or loss.",
+            "materiality": "Medium"
+          },
+          {
+            "category": "Regulatory Risk",
+            "description": "The death care industry in China is a highly regulated industry subject to strict government regulations on licenses and land supply, posing risks on the Group's business expansion. The industry is also facing challenging innovation and the maturity of relevant regulations remains uncertain.",
+            "raw_text": "The death care industry in China, subject to the strict requirement of relevant regulations imposed by the government, is a highly regulated industry. There are strict restrictions on licenses and land supply which pose risks and uncertainties on the Group's business expansion.",
+            "materiality": "High"
+          },
+          {
+            "category": "M&A Execution Risk",
+            "description": "Success of the acquisition strategy depends on: (1) whether acquired targets have hidden debts or unknown potential litigations; (2) whether the Group can integrate acquired targets properly and enhance their value; (3) whether there are sufficient skilled and qualified managerial personnel to satisfy market needs during expansion.",
+            "raw_text": "One of the important strategies of the Group is to accomplish business expansion through mergers and acquisitions. However, the success of such strategy depends on a number of uncertainties, which mainly include: whether the acquired targets have any hidden debts and unknown potential litigations, whether we can integrate the acquired targets properly and enhance their value added, and whether there are sufficient skilled and qualified managerial personnel to satisfy the market needs during our expansion.",
+            "materiality": "High"
+          },
+          {
+            "category": "Modernization Reform Risk",
+            "description": "The death care industry originates from long cultural history with a geographically distinctive and traditional operation model. The Group is committed to leading the modernization reform of the death care business in China to reduce the risk arising from outdated regulations.",
+            "raw_text": "As the death care industry in China is originated from a long cultural history, it features a geographically distinctive and traditional operation model. The conventions of such industry are now facing challenging innovation and the maturity of relevant regulations remains to be seen while the world keeps progressing and updating. In a leading position of China's death care industry, the Group is committed to leading the modernization reform of the death care business in China so as to reduce the risk arising from outdated regulations for the industry.",
+            "materiality": "Medium"
+          }
+        ]
+      }
+    },
+    "triage": {
+      "meta": {
+        "agent_name": "triage",
+        "timestamp": "2026-03-27T11:28:08.758169+00:00",
+        "model_used": "MiniMax-M2.7-highspeed",
+        "token_usage": 3868
+      },
+      "output": {
+        "stop_signal": null,
+        "decision": "PASS",
+        "explainability_score": {
+          "business_model": 8,
+          "competition_structure": 7,
+          "financial_mapping": 8,
+          "key_drivers": 7
+        },
+        "fatal_unknowns": [
+          "2026财年年报日期为2026-03-19（未来日期），需核实是否为数据源录入有误",
+          "当前市盈率（P/E）为null，可能因当期亏损或数据不可用，需在深度分析中确认盈利状况",
+          "关联方交易有脚注但透明度待验证，需检查交易金额占比及定价公允性"
+        ],
+        "why_it_is_or_is_not_coverable": "福寿园的核心业务清晰——墓地开发销售与殡仪服务，有6年完整的IFRS财务数据（2020-2025 FY）、30条分部记录、11条会计政策条目，以及风险因素、客户集中度、债务工具等详细脚注。三表（利润表、资产负债表、现金流量表）均为6年数据，无会计政策变更。这些数据足以支撑商业模式拆解、盈利质量评估和关键驱动因素追踪。虽然缺失2018/2019财年数据（最早为2019 FY）、P/E为null存在不确定性、2026年报日期异常需要核实，但这些都是数据完整性问题而非分析能力问题。殡葬服务行业的\"抗周期\"属性和Regulatory风险因素也已在档案中标注，可纳入深度分析框架。",
+        "next_step": "1. 核实2026财年年报的日期来源（是否为预发布或录入错误）；2. 在深度分析中重点审查P/E为null的原因——若因亏损则需追溯历史盈利稳定性；3. 提取关联方交易明细（脚注中有\"Related Party Transaction\"等主题），评估交易占比和定价合理性；4. 确认行业可比公司名单（殡葬行业A股/港股可比标的）。",
+        "data_availability_summary": "6年IFRS财报（2020-2025 FY）+ 6期中报（2019H1-2025H1），三表完整，分部数据30条，会计政策11条，风险因素13条，数据覆盖深度满足分析要求，缺失最早两年数据（2018 FY/2018H1）及当前P/E数据属于非致命性缺口。"
+      }
+    },
+    "accounting_risk": {
+      "meta": {
+        "agent_name": "accounting_risk",
+        "timestamp": "2026-03-27T11:28:39.558372+00:00",
+        "model_used": "MiniMax-M2.7-highspeed",
+        "token_usage": 11405
+      },
+      "output": {
+        "stop_signal": null,
+        "risk_level": "YELLOW",
+        "major_accounting_changes": [
+          "2024年确认1.04亿元资产减值损失（物业、设备、墓地资产及商誉），2025年上半年进一步确认2.18亿元减值，减值规模显著增加",
+          "商誉账面价值持续增长（2020年8.61亿→2024年11.06亿），占总资产比例约15.8%，存在潜在减值风险",
+          "应收账款大幅下降（2022年4.23亿→2024年1.33亿），同时ECL模型冲回约2358万，变动幅度较大需关注回收情况",
+          "2024年收入同比下降21%，但同期成本仅下降6%，毛利率从52%骤降至30%，成本与收入变动不匹配"
+        ],
+        "comparability_impact": "会计政策整体保持一致，采用IFRS 15收入确认标准和IAS 36资产减值测试，合并范围有正常收购活动（增持子公司股权及新设合资公司）。但2024年出现大额减值损失（1.04亿元），2025年上半年进一步计提2.18亿元减值，且毛利率从52%骤降至30%，这些一次性项目和盈利能力大幅变化使2024-2025年财务数据与历史年度可比性下降。需将减值项目正常化后重新评估经常性盈利能力。",
+        "credibility_concern": "整体财务数据可信度处于中等水平。会计政策未见激进变更，审计师未披露变更迹象，无财务重述记录。但存在若干需关注事项：1）商誉占总资产比例约16%且持续增长，减值测试的充分性需审视；2）2024年一次性减值损失达1.04亿元，剔除后净利润大幅下降；3）2025年上半年即出现2.18亿元减值并报告亏损，全年业绩指引存疑；4）应收账款大幅下降同时ECL冲回，可能存在收入确认时点或信用政策激进的问题。管理层在行业下行周期通过减值\"洗大澡\"的可能性存在，但尚未构成系统性财务造假迹象。建议在后续分析中对商誉减值充分性保持警惕。",
+        "stop_or_continue": "继续分析，但需在估值模型中对商誉减值风险、成本结构异常和应收账款质量进行专项排查。如后续发现审计意见非标或商誉减值测试存在重大假设偏差，应立即停止。"
+      }
+    },
+    "financial_quality": {
+      "meta": {
+        "agent_name": "financial_quality",
+        "timestamp": "2026-03-27T11:29:28.097024+00:00",
+        "model_used": "MiniMax-M2.7-highspeed",
+        "token_usage": 12931
+      },
+      "output": {
+        "stop_signal": null,
+        "pass_minimum_standard": true,
+        "scores": {
+          "per_share_growth": 3,
+          "return_on_capital": 4,
+          "cash_conversion": 9,
+          "leverage_safety": 8,
+          "capital_allocation": 4,
+          "moat_financial_trace": 6
+        },
+        "key_strengths": [
+          "经营现金流持续充裕，CFO/NI比率多年>1，FCF转化能力强（2024年FCF/NI=1.59）",
+          "财务结构极其稳健，净现金状态，利息覆盖倍数高达43倍",
+          "资本支出强度低（Capex/Revenue约3.8%），轻资产业务模式特征明显",
+          "流动比率2.83、速动比率2.34，短期偿债能力充足",
+          "墓地服务行业高进入壁垒，提供天然护城河保护"
+        ],
+        "key_failures": [
+          "2024年盈利能力断崖式下滑：净利润下降49%，EPS从0.348降至0.164元",
+          "毛利率从2023年52%骤降至2024年30%，成本控制出现重大问题",
+          "2025年上半年已出现2.61亿元亏损，全年业绩存在极大不确定性",
+          "2024年股息支出7.2亿元超过当年自由现金流6.3亿元，资本配置不可持续",
+          "ROE从2023年约16%大幅下滑至2024年约8.6%，资本效率显著恶化",
+          "计提大额资产减值（2024年1.04亿元，2025年上半年2.18亿元），资产质量存疑"
+        ],
+        "should_continue": "财务质量勉强达标（六维平均5.17分），建议继续但需高度谨慎。核心问题是2024年业绩断崖式下滑（收入-21%，净利润-49%）且2025年上半年已亏损，需深入分析下滑原因是疫情后一次性因素还是结构性恶化。若是后者，护城河将受侵蚀。建议在后续分析中重点评估盈利恢复的确定性和持续性。"
+      }
+    },
+    "net_cash": {
+      "meta": {
+        "agent_name": "net_cash",
+        "timestamp": "2026-03-27T11:29:53.658831+00:00",
+        "model_used": "MiniMax-M2.7-highspeed",
+        "token_usage": 11620
+      },
+      "output": {
+        "stop_signal": null,
+        "net_cash": 2580.08,
+        "net_cash_to_market_cap": null,
+        "attention_level": "WATCH",
+        "dividend_profile": {
+          "pays_dividend": true,
+          "coverage_ratio": 0.87
+        },
+        "buyback_profile": {
+          "has_buyback": true,
+          "shares_reduced": false
+        },
+        "cash_quality_notes": [
+          "【事实】2024年现金及等价物20.56亿元，短期投资5.89亿元，合计26.45亿元（均为人民币）。",
+          "【事实】2024年无银行贷款（2023年有2亿元银行贷款已于2024年到期偿还），长期借款为0。",
+          "【事实】2024年租赁负债约0.65亿元（流动0.25亿+非流动0.39亿），来自少数股东的计息贷款约0.30亿元。",
+          "【事实】净现金 = 26.45亿 - 0.95亿 ≈ 25.5亿元，处于净现金状态。",
+          "【事实】2024年分红支出7.20亿元，自由现金流6.30亿元，分红覆盖率0.87x < 1.0x，分红依靠存量现金补充。",
+          "【推断】分红覆盖率<1x说明当前分红不可完全由经营现金流覆盖，但公司现金充裕（25亿+），短期内可维持。",
+          "【事实】2024年回购仅1548万元，对比总市值规模极小，实质性降低流通股效果有限。",
+          "【事实】2024年计提资产减值1.04亿元（不动产、设备、无形资产及商誉），显示部分并购资产存在价值风险。",
+          "【未知】H股实时市值数据未提供，无法精确计算net_cash_to_market_cap比率，attention_level基于定性判断。",
+          "【事实】公司主营业务为墓地及殡葬服务，商业模式自带预收款属性（客户预付墓地款项），需注意此类负债性质。",
+          "【推断】合同负债可能包含在应付账款/其他应付款中，但数据未单独披露，现金质量需进一步验证。",
+          "【未知】受限资金、质押存款等细节未在数据中披露，无法确认现金是否完全自由可用。"
+        ]
+      }
+    },
+    "valuation": {
+      "meta": {
+        "agent_name": "valuation",
+        "timestamp": "2026-03-27T11:30:36.787975+00:00",
+        "model_used": "MiniMax-M2.7-highspeed",
+        "token_usage": 12177
+      },
+      "output": {
+        "stop_signal": null,
+        "valuation_method": [
+          "正常化盈利收益率法",
+          "自由现金流收益率法",
+          "ROIC再投资增长模型",
+          "分红折现模型（验证）"
+        ],
+        "expected_lookthrough_return": {
+          "bear": 0.07,
+          "base": 0.1,
+          "bull": 0.14
+        },
+        "friction_adjusted_return": {
+          "bear": 0.055,
+          "base": 0.08,
+          "bull": 0.115
+        },
+        "meets_hurdle_rate": false,
+        "notes": [
+          "【关键数据缺口】当前市值/股价未知，无法精确计算收益率。本分析基于合理价格假设（HKD 3.5-4.5元区间，约60-80亿港元市值）。若当前价格显著高于此区间，回报率将低于预期。",
+          "【正常化盈利调整依据】2024年净利润3.73亿包含1.04亿资产减值及信用损失回转-0.14亿。标准化调整：+0.90亿非现金减值（假设70%为非经常性），调整后净利润约4.6亿；历史5年均值约6.2亿含2021年高基数。保守采用4.5-5亿作为正常化盈利。",
+          "【FCF质量评估】2024年FCF 6.30亿，显著高于净利润3.73亿，主要因折旧摊销2.07亿在费用中但非现金支出。调整后FCF收益率约4-5%（市值60-80亿假设下），表明现金流创造能力强于报表利润。",
+          "【ROIC可持续性存疑】2024年ROIC约10-12%（估算NOPAT 5.3亿/投入资本45亿），但较2023年（估计15%+）显著下滑。毛利率从52%暴跌至30%，反映墓地服务定价权受压，竞争加剧或需求结构变化。",
+          "【再投资空间评估】公司持续进行墓地开发并购（2024年新增2个项目），但商誉已占资产16%（11.1亿），说明过往收购成本较高。殡葬行业重许可、高进入壁垒，但整合效率取决于管理层能力。",
+          "【分红与资本配置】历史分红率超100%（2024年分红7.2亿>净利润3.7亿），可能透支现金流。需关注2025年H1亏损后的分红政策持续性。",
+          "【周期性因素】殡葬服务理论上刚需、抗周期，但2024年收入-21%表明存在周期性或结构性压力。人口结构（老龄化加速）是长期利好，但短期消费降级可能压制墓地消费。",
+          "【摩擦成本估算】港股通投资者面临：1) 分红税10%（内地企业预扣）；2) 汇率波动（CNY/HKD）；3) 交易佣金约0.1-0.2%。综合摩擦成本约2-2.5%。",
+          "【风险提示】H1 2025录得-2.61亿净亏损（主因2.18亿减值），若下半年无显著改善，2025全年可能亏损，正常化盈利需进一步下调。当前价格可能未充分反映盈利下滑程度。",
+          "【结论】Base case回报率勉强接近10%门槛，但需以下条件：1) 买入价格不高于HKD 4元；2) 2025年后盈利企稳；3) ROIC维持10%+。任何一项恶化均可能导致不达标。建议在明确当前估值前保持谨慎。"
+        ]
+      }
+    },
+    "moat": {
+      "meta": {
+        "agent_name": "moat",
+        "timestamp": "2026-03-27T11:30:59.911524+00:00",
+        "model_used": "MiniMax-M2.7-highspeed",
+        "token_usage": 10924
+      },
+      "output": {
+        "stop_signal": null,
+        "industry_structure": "中国殡葬服务业，行业高度分散。福寿园是领先的墓园运营商之一，但全国市场CR集中度低，存在大量地方性墓园和殡仪馆。行业进入壁垒包括：政府土地审批限制、殡葬服务许可证要求、资金门槛。但分散化格局使价格竞争压力持续存在。殡葬服务在中国被视为\"公益性事业\"，政府监管力度较大，包括价格指导和服务标准管控。",
+        "moat_type": [
+          "墓地资源稀缺性",
+          "品牌信任",
+          "转换成本",
+          "进入壁垒（许可证/土地）"
+        ],
+        "pricing_power_position": "价格制定者/接受者：部分价格制定者，但受政府管制约束。上游议价力：土地/墓园供应商分散，议价力一般。下游客户议价力：客户处于悲痛时刻，价格敏感度相对较低但受政府定价指导限制。综合评估：公司具有一定品牌溢价能力，但定价权受政策压制，非完全市场化定价。",
+        "moat_trend": "weakening（护城河正在削弱）- 支撑信号：1）毛利率从2023年的52%骤降至2024年的30%，下降22个百分点；2）2024年资产减值1.04亿元，2025H1减值2.18亿元，资产质量恶化；3）2024年收入同比下降21%至20.77亿元，2025H1继续同比下降44%；4）主业墓地服务在2025H1出现营业亏损（-2.14亿元）；5）商誉占总资产比例高（15.8%），存在持续减值风险；6）分红支出720M超过净利润497M，现金流消耗严重。这些信号表明核心业务竞争力在下降，可能与行业政策收紧、竞争加剧或墓地资源枯竭有关。"
+      }
+    },
+    "ecology": {
+      "meta": {
+        "agent_name": "ecology",
+        "timestamp": "2026-03-27T11:31:15.931731+00:00",
+        "model_used": "MiniMax-M2.7-highspeed",
+        "token_usage": 11720
+      },
+      "output": {
+        "stop_signal": null,
+        "ecological_niche": "**主导者地位，但核心生态位正在收缩**\n\n【事实】\n- 中国殡葬服务业龙头，市场份额领先\n- 墓地服务（Burial services）占总收入86%+，贡献绝大部分利润\n- 2024年墓地服务收入17.9亿元，经营利润8.3亿元（利润率46%）\n- 殡仪服务收入2.9亿元，但利润率仅42%，且规模较小\n- 持有大量土地/墓地资源储备，资产中包含大量商誉（11.1亿）和无形资产（2.6亿）\n\n【推断】\n- 墓地资源具有\"不可再生性\"特征，形成天然进入壁垒\n- 但这种壁垒正在被政策变化和技术替代侵蚀\n- 核心客户群：中老年人群、偏好传统土葬的家庭\n- H1 2025数据显示收入同比下降约44%（6.1亿 vs 11亿），表明核心业务正在快速收缩\n\n【未知】\n- 具体市场份额和竞争对手情况（数据未提供）\n- 墓地资源的具体年限和可持续销售时间\n- 年轻一代消费行为的量化数据",
+        "adaptability_trend": "**适应性正在减弱，呈现明显的\"恐龙化\"特征**\n\n【事实】\n1. **减值激增**：2024年减值1.04亿元，H1 2025已达2.18亿元（ annualized后更高）\n2. **毛利率崩塌**：综合毛利率从2023年52%骤降至2024年30%，2025 H1仅27.6%\n3. **分红侵蚀资本**：2024年分红7.2亿元 > 当年净利润4.97亿元\n4. **经营现金流恶化**：H1 2025仅5700万元，同比下降90%\n5. **管理层行为**：减值增加暗示对资产质量判断趋于悲观\n\n【推断】\n- 公司可能面临\"路径依赖\"陷阱：核心墓地业务模式难以快速转型\n- 应对互联网祭扫、数字化服务等趋势的具体行动不明确\n- 面对消费升级和年轻人偏好变化，缺乏有效应对策略\n- 商誉（11亿）高企，暗示过去高溢价收购，未来减值风险持续存在\n\n【未知】\n- 公司数字化转型战略具体内容\n- 新业务探索进展\n- 管理层对未来趋势的战略判断",
+        "cyclical_vs_structural": "**结构性恶化，远非简单周期性波动**\n\n【关键区分】\n- **毛利率崩溃**（52%→30%）：周期性波动无法解释如此剧烈的盈利能力下降\n- **减值激增**（连续大规模）：暗示核心资产基础出现问题\n- **收入加速下滑**：H1 2025同比下降44%，非正常波动\n\n【推断】\n- **可能的结构性因素**：\n  1. 墓地供给增加（竞争加剧或新进入者）\n  2. 消费降级/替代殡葬方式普及\n  3. 前期高溢价收购的资产质量问题集中暴露\n  4. 定价权受到政策压制\n\n- **周期性因素可能存在但非主因**：\n  1. 中国死亡人口数量相对稳定，老龄化提供基本需求\n  2. 但需求结构可能正在转变（从高价墓地转向低价方案）\n\n【结论】更像\"结构性侵蚀\"，而非周期性调整。如果真是周期，减值应该是暂时的；但连续大规模减值暗示管理层对长期价值判断趋于悲观。",
+        "long_term_survival_probability": "**10-20年生存概率：中等偏低（35-50%）**\n\n【有利因素】（支撑生存）\n- 债务低（资产负债率29%），财务韧性强\n- 墓地资源稀缺性提供短期护城河\n- 老龄化趋势（死亡人口增加）\n- 行业经验积累\n\n【威胁因素】（侵蚀生存概率）\n1. **替代品威胁（高）**：树葬、海葬、花葬等环保方式崛起；政府推广节地葬\n2. **需求结构变化（中-高）**：年轻一代对传统墓地态度转变；消费降级趋势\n3. **政策风险（中）**：殡葬业监管加强；价格管制可能性；行业整合压力\n4. **资产质量风险（已发生）**：商誉减值可能持续；核心资产价值重估\n5. **技术颠覆（低-中）**：VR/AR祭扫、数字化纪念服务可能改变行业形态\n\n【关键判断】\n- 如果公司不能成功转型为\"生命纪念服务\"综合提供商，仅依赖传统墓地销售，生存概率可能低于40%\n- 如果能在数字化、环保葬、纪念服务等领域建立新增长点，生存概率可提升至55-65%\n- 但H1 2025数据显示转型尚未见效\n\n【未知】\n- 公司数字化转型战略具体内容和进展\n- 新业务收入占比和发展速度\n- 主要竞争对手的战略动向\n- 监管政策未来走向"
+      }
+    },
+    "psychology": {
+      "meta": {
+        "agent_name": "psychology",
+        "timestamp": "2026-03-27T11:31:16.280393+00:00",
+        "model_used": "MiniMax-M2.7-highspeed",
+        "token_usage": 11622
+      },
+      "output": {
+        "stop_signal": null,
+        "management_incentive_distortion": "** FACT: 账面数字揭示的激励扭曲 **\n- 2024年股息支付 RMB 7.2亿，但归属母公司净利润仅 RMB 3.73亿，派息率≈193%\n- 2025年上半年已宣布股息 RMB 5.61亿，同期经营现金流仅 RMB 5694万（净利润-2.62亿）\n- 分红总额持续超过净利润，消耗资产负债表现金（2023年现金 RMB 22.95亿 → 2024年 RMB 20.57亿 → 2025H1 RMB 16.49亿）\n\n** FACT: 并购与商誉积累 **\n- 商誉从2020年 RMB 8.6亿持续增至2023年 RMB 11.29亿；2024年+2025H1合计计提减值约 RMB 3.22亿，但商誉仍有 RMB 9.4亿\n- 2024年无形资产+墓地资产减值合计 RMB 1.04亿，2025H1单期已达 RMB 2.18亿\n- 2020年大额收购 RMB 4.84亿，2023年收购 RMB 1.19亿，持续并购伴随减值加速\n\n** INFERENCE: 管理层激励结构可能存在以下问题 **\n- 持续高额分红+持续减值 = 潜在\"收割\"信号：现金分配给股东（维持股价叙事），减值损失由未来盈利/资产核销吸收，可能存在跨期收益操纵\n- 管理层薪酬与营收/规模挂钩而非与资产回报率挂钩时，并购冲动（即使伴随减值）仍被激励\n- 缺乏股票回购的持续承诺（2020年回购 RMB 1.88亿后大幅减少），说明管理层更倾向于现金分红而非长期股东价值\n\n** UNKNOWN: 管理层持股及增减持信息未披露，无法判断内部人对估值的真实判断 **",
+        "market_sentiment_bias": "** FACT: 基本面断崖式恶化 vs 市场定位认知 **\n- 收入：2023年 RMB 26.28亿 → 2024年 RMB 20.77亿（-21%），2025H1同比再降44.3%\n- 毛利率：2023年 ~52% → 2024年 ~29.9%，骤降22个百分点\n- 归母净利润：2023年 RMB 7.91亿 → 2024年 RMB 3.73亿（-53%），2025H1亏损\n\n** FACT: 业务模式误解风险 **\n- 市场普遍将殡葬业定位为\"防御性+人口红利\"叙事（老龄化受益）\n- 但预付款模式下的收入确认延迟特征（墓地销售在 IFRS 15 下可跨期确认）导致利润表可能滞后反映真实业务波动\n- 2024年墓地业务收入从 RMB 22.98亿骤降至 RMB 17.88亿，说明并非周期性问题而是需求实质性萎缩\n\n** INFERENCE: 市场定价可能存在的认知偏差 **\n- \"熟悉感=安全感\"偏差：殡葬龙头、品牌知名度高 → 被默认为稳健投资，但忽略了竞争加剧、土地政策风险、需求结构变化\n- 锚定偏差：若投资者以2021-2023年利润为锚，当前股价看似\"便宜\"，但趋势已完全逆转\n- 共识预期可能基于历史成长曲线外推，未充分定价业务模式结构性变化\n\n** UNKNOWN: 当前股价、P/E、机构持仓数据未提供，无法量化定价偏差程度 **",
+        "narrative_vs_fact_divergence": "** FACT: 高股息叙事 vs 盈利质量 **\n- 主流叙事：\"高股息、防御性强、稳健现金流\"\n- 事实：2024年自由现金流 RMB 6.30亿，但股息支出 RMB 7.20亿，FCF/股息比 < 1，且H1 2025已出现负自由现金流\n- 高股息的持续性存疑：现金持续消耗，2024年已动用 RMB 2亿借款额度偿还债务（短期借款2023年 RMB 2亿 → 2024年仍存在但债务到期）\n\n** FACT: 人口红利叙事 vs 竞争现实 **\n- 殡葬业并非高门槛：地方政府发放牌照、各地本土竞争者存在\n- 商誉减值加速（2025H1已达 RMB 2.18亿）暗示此前收购溢价可能虚高，扩张带来的协同效应有限\n- 2024年墓地业务营业利润从 RMB 12.59亿降至 RMB 8.30亿（-34%），远超收入降幅，显示定价权可能正在丧失\n\n** FACT: IFRS 15收入确认的隐蔽性 **\n- 墓地销售可在\"一段时间内\"或\"某时点\"确认，管理层对收入确认时点有裁量空间\n- 2021年SGA费用异常高（=收入？数据口径可能有问题，但若属实则存在费用资本化或收入虚增嫌疑）\n- 2022年突然出现 RMB 3057万\"金融工具公允价值变动收益\"，非经常性损益占比不低\n\n** INFERENCE: 可能被市场误解的观点 **\n1. \"殡葬是抗周期业务\"——收入和利润率的双双崩塌说明需求并非刚性\n2. \"高股息证明质地好\"——盈利质量恶化背景下的高股息是价值陷阱信号\n3. \"扩张并购带来增长\"——商誉持续减值证明整合效果存疑\n4. \"IFRS报表真实反映盈利能力\"——H1 2025毛利率从约50%跌至约27.6%，减值加速，盈利质量持续恶化\n\n** UNKNOWN: 无法确认管理层是否有意利用收入确认政策平滑利润；无法获得分析师一致预期数据验证共识合理性 **"
+      }
+    },
+    "compounding": {
+      "meta": {
+        "agent_name": "compounding",
+        "timestamp": "2026-03-27T11:31:23.504819+00:00",
+        "model_used": "MiniMax-M2.7-highspeed",
+        "token_usage": 12275
+      },
+      "output": {
+        "stop_signal": null,
+        "compounding_engine": "**复利引擎评估：混合型（低再投资+高分红回馈），但引擎质量存疑**\n\n**事实：**\n1. 公司采用\"轻资产+高现金流\"运营模式——近5年Capex占收入比平均仅4.6%，远低于折旧摊销（占收入约8%），本质是消耗已建立的无形资产（墓地经营权、殡仪特许）而非持续资本投入\n2. 核心业务墓地服务的经济学特征：前期获取墓地成本资本化，后期维护成本极低（FY2024墓地服务OP Margin 46.4%，且无重大资本需求）\n3. 分红+回购总额远超净利润：FY2024分红7.2亿+回购0.15亿=7.35亿，而归母净利润仅3.73亿；FY2025H1仍分红5.61亿\n4. ROE从FY2021峰值~14.3%大幅下滑至FY2024~6.7%（因净利润腰斩+资产减值）\n\n**推断：**\n- 公司的\"复利\"主要通过大比例分红/回购实现，而非内生增长再投资——这不是经典的巴菲特式复利引擎\n- FY2024收入下滑20.9%至20.8亿，净利润下滑52.7%至3.73亿，叠加1.04亿资产减值，显示核心竞争力可能正在侵蚀\n- 大量无形资产+商誉（FY2024合计13.6亿占总资产19.4%）的存在，暗示公司依赖外延收购维持增长，而非内生复制\n\n**未知：**\n- 收入下滑的驱动因素：是竞争加剧、监管压制、还是一次性因素？\n- 商誉减值风险：2020年收购产生的商誉8.6亿中，已有部分减值但仍存续\n- 核心墓地资源的真实经济寿命和续期成本？",
+        "incremental_return_on_capital": "**增量资本回报：趋势向下，边际投资吸引力存疑**\n\n**事实：**\n1. 计算调整后ROIC（将D&A加回净利润，NOPAT/Invested Capital）：\n   - FY2024：NOPAT≈(7.1亿+1.73亿)*(1-44.1%税率)≈4.94亿；IC≈股东权益55.6亿+有息负债(已还清)≈55.6亿；ROIC≈8.9%\n   - FY2023：NOPAT≈(13.7亿+1.67亿)*(1-44.3%)≈8.54亿；ROIC≈14.4%\n   - FY2021：ROIC≈15.4%（估算）\n   - **结论：增量ROIC从15%+降至9%左右，下降趋势明显**\n\n2. 增量资本配置效率：\n   - FY2024资本支出0.79亿，折旧1.73亿——净资本消耗为负，说明公司不需大量再投入维持运营\n   - 收购扩张：FY2020年收购花费4.84亿，但FY2024再无重大收购，且FY2025H1出现大额减值2.18亿\n\n3. FCF/总资产比率（近似增量资本回报代理）：\n   - FY2020: 12.5%, FY2021: 11.7%, FY2022: 8.7%, FY2023: 14.3%, FY2024: 9.0%\n   - 波动且无明显上升趋势\n\n**推断：**\n- 公司没有明确的\"再投资机会\"——核心墓地业务已成熟，边际扩张（收购新墓地）面临监管和竞争压力，ROIC难以上升\n- 分红率>100%本质上是将存量资产变现回馈，而非增量投资回报\n\n**未知：**\n- 是否有足够的优质并购标的可维持收购扩张策略？\n- 新收购资产的预期回报率是否高于存量资产？",
+        "sustainability_period": "**可持续期：3-5年中短期，长期面临结构性风险**\n\n**支持长期可持续的因素（事实）：**\n1. 需求刚性强：中国老龄化加速（60岁以上人口已超3亿），死亡人数自然增长\n2. 资源壁垒高：优质墓地选址受土地和监管限制，已获牌照的竞争者有限\n3. 定价能力强：历史数据看毛利率维持在40-50%区间，墓地服务OP Margin 46%\n\n**威胁可持续期的因素（推断/未知）：**\n\n1. **监管风险（已知高）**：\n   - 民政部对墓地价格的管控趋严，多地出台限价令\n   - \"殡葬改革\"运动可能压缩高价墓地的市场空间\n   - FY2024收入大幅下滑可能已反映部分监管压力\n\n2. **竞争加剧（推断）**：\n   - 行业集中度低，区域龙头各自为政\n   - 跨区域扩张需要大量资本和地方政府关系，难度高\n\n3. **替代威胁（未知）**：\n   - 生态葬、海葬等低价替代品受政策鼓励\n   - 年轻一代观念变化，对高价墓地接受度下降\n\n4. **资产质量（已知风险）**：\n   - FY2025H1已确认减值2.18亿，若商誉/无形资产继续减值，将侵蚀ROIC\n   - 存货（墓地）占资产比例高，若去化速度放慢将影响现金流\n\n**综合判断：**\n- 3-5年内核心业务仍可维持稳定（假设无重大监管黑天鹅），但增长空间有限\n- ROIC已从15%降至9%，若趋势延续，复利效应将转为负向\n- 长期（10年+）面临需求结构变化和监管不确定性",
+        "per_share_value_growth_logic": "**每股价值增长逻辑：驱动力疲弱，不宜期待复利式增长**\n\n**每股关键指标趋势（基于加权平均股数约22.75亿股）：**\n\n| 指标 | FY2021 | FY2022 | FY2023 | FY2024 | 趋势 |\n|------|--------|--------|--------|--------|------|\n| 归母EPS(RMB) | 0.316 | ~0.289 | ~0.348 | ~0.164 | ▼大幅下降 |\n| 每股FCF(RMB) | 0.382 | ~0.337 | ~0.465 | ~0.277 | ▼下降 |\n| 每股净资产(RMB) | 2.22 | 2.41 | 2.60 | 2.44 | →持平 |\n| 每股分红(RMB) | 0.095 | 0.106 | 0.164 | ~0.317 | 异常上升* |\n\n*注：FY2024每股分红0.317元是基于总分红7.2亿/22.7亿股，远超EPS(0.164)，属于透支式分红\n\n**增长驱动力拆解：**\n\n1. **收入增长 x**：负向\n   - FY2024收入下滑21%，FY2025H1继续下滑（同比-44%）\n   - 存量墓地销售模式存在天花板——中国死亡人数增长约3-4%/年，但公司销量下降\n\n2. **利润率提升 x**：持平至负向\n   - 毛利率从FY2023的52%降至FY2024的30%（因收入下滑但成本相对刚性）\n   - SGA费用率上升（FY2024占收入11.8%，FY2023仅6.5%）\n\n3. **股本缩减 +**：有限\n   - 历史上通过回购少量缩减（FY2021回购0.72亿，FY2024回购0.15亿）\n   - 但分红超利润，已无缩减空间\n\n**每股内在价值增长判断：**\n- **短期（1-3年）**：每股价值可能持平或下降——净利润下滑、分红不可持续（FY2025H1仍大额分红但已亏损）、资产减值压力\n- **中期（3-7年）**：若监管稳定+老龄化需求释放，EPS可能温和回升至0.25-0.30元，但无复利式增长\n- **长期（7年+）**：取决于：①能否通过收购维持增长；②新业务（殡仪服务、墓园运营服务）能否规模化\n\n**关键约束：**\n- 分红率>100%不可持续——最终必须降派息，这将打击估值\n- 资产减值风险：商誉/无形资产13.6亿，可能还有减值空间\n- 竞争格局：区域分散，跨区域复制能力未经验证"
+      }
+    },
+    "systems": {
+      "meta": {
+        "agent_name": "systems",
+        "timestamp": "2026-03-27T11:32:08.663311+00:00",
+        "model_used": "MiniMax-M2.7-highspeed",
+        "token_usage": 3090
+      },
+      "output": {
+        "stop_signal": null,
+        "single_points_of_failure": [
+          "**政府土地授权/墓园经营权**：墓园业务依赖政府授予的土地使用权和运营许可。土地枯竭或政策变化可能导致核心业务崩溃。这是最高优先级的单点故障。",
+          "**墓园土地储备**：墓地是主要资产，一旦现有墓园土地售罄且无法补充，核心收入来源立即终止。2024年墓地服务占总收入86%，无此则无业务。",
+          "**政府殡葬政策**：中国殡葬改革政策持续推广火葬、限制墓地扩建。若政策大幅转向，可能从根本上摧毁burial services商业模式（占收入86%）。",
+          "**商誉资产**：1.11B RMB商誉占总资产15.8%。2025年上半年已确认218M商誉减值。若收购资产持续贬值，可能触发大规模商誉减值，对资产负债表造成不可逆损伤。",
+          "**管理团队稳定性**：作为高度依赖品牌信任和本地关系的服务业，关键管理人员流失可能影响运营连续性和并购整合效果。"
+        ],
+        "fragility_sources": [
+          "**监管政策风险（HIGH）**：殡葬行业在中国受严格监管。政府殡葬改革政策（推广火葬、限制墓地扩张、环保要求）可能从根本上改变行业格局。公司完全无应对政策巨变的plan B。",
+          "**收入结构集中度（HIGH）**：墓地服务占总收入86%，运营利润占比更高。单一细分市场过度集中，任何针对墓地服务的政策打压或需求下降将造成系统性打击。",
+          "**分红政策与现金流背离（HIGH）**：2024年分红支出720M超过经营现金流709M。公司动用现金储备支付分红。2025年上半年经营现金流骤降至57M，分红可持续性存疑。",
+          "**并购驱动型增长的整合风险（MEDIUM）**：历史上依赖并购扩张（2020年484M、2023年119M），累计商誉1.11B。频繁收购带来整合失败、商誉减值风险。2025年已确认218M减值。",
+          "**收购资产质量恶化（MEDIUM）**：2025年上半年出现大规模资产减值（墓地资产+商誉合计约218M），反映部分收购标的预期收益下降。这可能是系统性问题的信号。",
+          "**非墓地服务Segment拖累（MEDIUM）**：Funeral services和Other services在2025年上半年均录得负经营利润，合计约-225M。这些扩张业务正在消耗公司资源而非贡献盈利。",
+          "**H1 2025业绩断崖（MEDIUM-HIGH）**：收入从2024年H1的1.1B降至610M（下降45%），经营利润从+512M转为-229M。需确认这是一次性因素还是结构性恶化。无足够信息判断。",
+          "**客户集中度（LOW-未知）**：墓地服务面向个人消费者，天然分散。但具体地理分布未知，若集中在单一省份则政策风险放大。",
+          "**融资依赖（LOW）**：公司现金储备充足（2.06B），债务极低（仅30M短期借款）。短期内无融资依赖风险。但现金储备正在消耗（分红+运营下滑）。"
+        ],
+        "fault_tolerance": "**正面容错能力：**\n- 现金储备充裕：2.06B现金 + 589M短期投资 = 2.65B流动资产，可覆盖约3.7年当前亏损\n- 资产负债率低：总负债2.03B vs 总资产7.02B，权益5.56B，杠杆健康\n- 无长期刚性债务：2025年仅30.5M短期债务，无大规模债务到期压力\n\n**负面容错能力缺陷：**\n- 分红消耗资本：2024年分红720M > 经营现金流709M，资本在流失\n- 商誉脆弱：1.11B商誉如同悬顶之剑，一次性减值即可抹掉大部分净资产增长\n- 资产流动性差：576M存货（墓地资产/土地）难以快速变现\n- 经营现金流波动：2024年709M vs 2023年1.1B，剧烈下滑\n- 2025年上半年极端恶化：经营现金流仅57M，自由现金流转负，容错空间急剧收缩\n\n**评估**：短期内存量资本提供一定缓冲，但消耗速度快于预期。系统容错能力正在快速收窄。",
+        "system_resilience": "**当前系统韧性评估：差，且趋势恶化**\n\n**历史韧性记录：**\n- 2020-2023年：成功度过COVID，营收从1.89B增至2.63B（CAGR 11.7%）\n- 证明业务在一般宏观冲击下有韧性\n\n**当前压力测试结果：**\n- 2025年上半年严重不及预期（收入-45%，经营利润转负），系统正在经历未完成的压力测试\n- 历史上未经历过政策根本性变化或需求结构性下降的冲击——当前韧性未经真正检验\n\n**可承受冲击规模估算：**\n- 假设现金2.65B，无外部融资，理论可承受约3-4年的运营亏损\n- 但分红政策（每年720M+）若维持，耗尽时间缩短至约3年\n- 若政策导致业务永久性萎缩50%，当前资本结构仍可支撑，但需大幅削减分红\n\n**核心脆弱性：**\n公司韧性建立在\"现有墓园持续贡献现金流\"这一假设上。一旦：\n1. 政策禁止新墓地开发，或\n2. 消费者偏好永久转向火葬，\n则核心收入流萎缩，资本快速消耗，系统韧性归零。\n\n**综合评级：C（边际韧性，趋势向差）**\n\n**需要明确的未知因素：**\n1. 2025年业绩下滑原因——一次性减值？政策影响？竞争加剧？宏观经济？\n2. 公司土地储备规模和使用年限\n3. 地理收入分布和监管环境差异\n4. 管理层对政策变化的应对策略\n5. 是否有进入火葬/其他丧葬服务领域的计划\n\n**结论**：公司是一个在静态环境下表现稳健、但在动态环境下高度脆弱的系统。监管政策是最关键的变量，目前韧性评级不应因短期现金充裕而高估。"
+      }
+    },
+    "critic": {
+      "meta": {
+        "agent_name": "critic",
+        "timestamp": "2026-03-27T11:33:45.516340+00:00",
+        "model_used": "MiniMax-M2.7-highspeed",
+        "token_usage": 22199
+      },
+      "output": {
+        "stop_signal": null,
+        "kill_shots": [
+          "**政策强制火葬化（概率：中等，但影响：灭顶）**：中国殡葬改革的终极方向是火葬替代土葬。当前火葬率约50%，若国家强制推行全面火葬（技术上可行，政治上在环保压力下日益可能），福寿园86%的收入来源（墓地服务）将基本归零。这不是周期性风险，而是业务存在性本身的消灭。2024年收入20.8亿中86%依赖墓地销售，若政策完全转向，理论收入残余不足3亿（仅殡仪服务），不足以覆盖固定成本，公司将实质破产。",
+          "**资本耗尽导致的死亡螺旋（概率：高，时间：3-4年）**：2024年现金消耗4.07亿（分红7.2亿-经营现金流7.09亿）。若维持当前分红政策，2027-2028年现金将从20.6亿降至约4-6亿，届时：①无法继续大额分红（打击股价）；②无资金并购扩张；③无缓冲应对业务进一步恶化。2025H1已出现经营现金流0.57亿而分红5.61亿的极端背离，这不是\"高股息\"，这是在加速自杀。管理层无意愿/能力停止分红，意味着股东将在3-4年内目睹资本实质性归零。",
+          "**商誉炸弹完全引爆（潜在损失：归零级）**：当前商誉9.41亿+无形资产2.55亿+墓地存货5.58亿=17.54亿，占总资产72%。2024-2025H1已减值3.22亿，但减值测试的\"价值在用\"假设可能仍然虚高。若：①收入继续下滑20%+；②墓园续期成本超预期；③并购整合失败全部确认，则17亿+资产可能需要进一步减值5-10亿，直接侵蚀净资产50-80%。现有净资产55.6亿（归母），若减值10亿，每股净资产从2.44元降至约1.4元，P/B从1.23升至更高，但实质是资本毁灭。"
+        ],
+        "permanent_loss_risks": [
+          "**分红式资产消耗（已发生，不可逆）**：2024年分红7.2亿超过净利润4.97亿，2025H1分红5.61亿同时亏损2.62亿。这不是\"高股息回馈股东\"，而是对存量资本的实质性分配/消耗。每次分红后，净资产等额减少，而业务现金流无法补充消耗。2020-2024年累计分红约17.5亿，而累计净利润仅约20.3亿，分红/利润比率高达86%。股东拿回的不是\"多余的现金\"，而是本金的一部分。若分红持续，净资产将以每年5-7亿的速度减少，直至与资产减值叠加触发\"资不抵债\"阈值。",
+          "**应收账款异常与收入质量存疑（信号：财务操纵嫌疑）**：应收账款从2022年4.23亿骤降至2024年1.33亿（降幅68.5%），同时ECL模型冲回2358万。正常情况下收入下滑21%会导致AR相应下滑，但如此剧烈下降+减值冲回，暗示：①可能存在\"提前确认收入\"后将AR转移至表外；②也可能存在信用政策激进以至于部分收入从未真实产生；③2025H1毛利率从约50%跌至27.6%，若收入确认政策激进，当前利润表可能虚高了历史盈利水平，投资者基于历史利润率给予的估值锚定存在根本性错误。",
+          "**SGA费用异常揭示的管理失控（信号：治理缺陷）**：2021年SGA费用12.57亿，等于当年全部成本（成本12.57亿+收入23.26亿=毛利率46%），但同年净利润8.9亿。这种数据要么意味着SGA费用被重复计入成本，要么存在严重的费用资本化/虚增收入。无论哪种情况，都说明财务数据可信度存疑，投资者无法依赖公开报表进行估值判断。此外，2024年SGA费用率飙升至11.8%（2023年仅6.5%），成本管控能力存疑，暗示管理层对下行周期毫无准备。",
+          "**存货（墓地资产）价值重估风险（隐藏炸弹）**：存货5.76亿占总资产8.2%，包含已开发但尚未销售的墓地单位。在收入下滑44%的情况下，墓地去化速度必然放慢。若按照IFRS的\"可变现净值\"测试，存货可能需要计提大额跌价准备。2025H1墓地服务已出现-2.14亿营业亏损，若存货按比例减值，可能还需额外减值2-3亿。这将进一步侵蚀净资产，加速资本消耗。"
+        ],
+        "moat_destruction_paths": [
+          "**监管壁垒的政治性消失（非对称风险）**：福寿园的护城河核心是政府授予的土地使用权和殡葬服务许可证。这是一种\"政治性护城河\"，而非市场性护城河。它的脆弱性在于：①护城河的存在依赖于政府持续支持；②一旦政府出于\"殡葬改革\"或\"减轻民众负担\"的政治考量，主动放开竞争或强制压价，壁垒将瞬间崩塌；③地方政府有动机引入新竞争者降低墓地价格（舆情压力），这已在多地发生。2024年收入下滑21%可能部分反映了这种政策压力，而市场尚未充分定价\"监管壁垒逆转\"的风险。",
+          "**品牌护城河的本质虚无（无转换成本）**：墓地购买是极低频行为（一生1-2次），客户在悲痛时刻决策，价格敏感度实际较低但选择主要基于地理便利性和口碑，而非品牌忠诚度。这意味着：①福寿园在进入新省份时无法复制上海的成功经验（本地竞争者有地理优势和关系网络）；②客户不会因为\"福寿园\"三个字支付溢价；③跨区域扩张的规模效应极为有限。2024年收入下滑21%但没有看到任何关于市场份额变化的披露，暗示公司在与本地竞争者的价格战中可能已处于守势。",
+          "**墓地资源的\"不可再生\"变成\"不可持续\"**：表面上看，墓地资源稀缺形成壁垒。但深层次的问题是：①现有墓园有使用寿命（通常50-70年），一旦土地售罄，必须开发新墓园；②新墓园开发受严格土地审批（正与壁垒来源相同）；③2020-2024年累计资本支出仅3.37亿，远低于折旧3.74亿，说明公司几乎未进行新墓园储备投资；④当前减值激增（1.04亿→2.18亿）暗示部分墓园资产预期收益已下降，可能因为储量耗尽或竞争加剧。护城河正在以\"资源枯竭\"的方式被侵蚀，且没有任何清晰的应对计划。",
+          "**殡仪服务扩张失败暴露战略迷失**：公司试图从墓地服务（86%收入）扩张至殡仪服务和其他业务，但2025H1殡仪服务营业利润-531万、其他服务-1018万，双双亏损。这证明：①跨品类扩张的协同效应为零；②公司在非核心领域没有竞争优势；③管理层可能低估了殡葬业的运营复杂度。更糟的是，这些亏损业务消耗管理层注意力和资本，分散了对核心业务的关注，而核心业务正在断崖式下滑（-44%）。"
+        ],
+        "management_failure_modes": [
+          "**掏空式分红（非正常利益输送）**：分红政策极度异常：2024年分红7.2亿超过净利润4.97亿（超额193%），2025H1分红5.61亿同时亏损2.62亿。这不是\"慷慨回馈股东\"，而是：①管理层可能在业务恶化前加速将现金转移给股东（自己作为大股东受益最大）；②通过持续高分红维持股价幻觉，避免触发股权融资稀释；③若公司最终破产，分红已拿走的股东比剩余股东更合算。实际控制人白晓江通过上海中民资持股，高额分红直接流入内部人腰包。这是典型的\"先收割再破产\"模式。",
+          "**帝国建设式并购摧毁股东价值**：历史并购记录触目惊心：2020年4.84亿收购后产生大量商誉，2020-2024年累计并购支出超8亿，但截至2025H1已确认减值3.22亿，商誉仍有9.41亿。更关键的是，没有任何一笔收购披露过预期回报率或整合计划。管理层热衷于\"买买买\"的原因：①规模扩张提升管理层薪酬和地位；②并购产生的商誉是\"无形资产\"，可以暂时支撑账面净资产；③减值可以\"洗大澡\"一次性处理。但股东承担了全部风险：减值损失、整合失败、资本浪费。2025H1大规模减值2.18亿，部分是对过去错误并购的清算。",
+          "**激励扭曲导致的短视行为**：①管理层薪酬可能与营收挂钩而非ROE，导致追求规模而非回报；②缺乏持续的回购承诺（2020年回购1.88亿后骤降），说明管理层不认为股价被低估，不愿在低位买入；③分红+回购总额远超净利润（2020-2024累计7.35+0.35=7.7亿 vs 累计净利润约20亿），本质上是将融资现金（IPO募资+借款）分掉而非投入再投资。这是一种极端的短期主义：享受规模扩张带来的薪酬提升，将风险留给未来。",
+          "**财务数据可信度存疑（内部人控制）**：①SGA费用异常（2021年与成本持平）；②应收账款骤降68%同时ECL冲回；③收入确认政策（IFRS 15下的\"一段时间内\"确认）给了管理层较大的裁量空间。这些异常本应被审计师重点关注，但审计意见未披露重大保留事项。可能的原因：①审计师与公司关系密切（长期合作）；②异常确实有合理解释但未披露；③管理层操纵了审计。无论哪种情况，投资者都无法依赖公开数据进行估值，这是典型的\"信息不对称\"风险，对散户投资者尤其致命。"
+        ],
+        "what_would_make_this_uninvestable": [
+          "**第一：政策强制火葬化或墓地价格管制导致收入无法覆盖可变成本**。若政府实施类似\"墓地限价令\"或强制推广火葬，将直接消灭福寿园86%的收入来源。公司当前毛利率30%已是极限，若价格再压20%+，将立即亏损且无法通过降本弥补。这不是\"盈利下滑\"而是\"业务死亡\"。任何看到这类政策信号的投资者必须立即清仓。",
+          "**第二：连续3年以上净资产收益率（ROE）低于无风险利率（约3%）且分红覆盖率持续超过1.5倍**。这意味着公司不仅无法通过经营创造价值，还在消耗存量资本。当前的ROE 6.7%已接近临界点，若进一步下滑至3%以下，且现金消耗速度不变，则5年内净资产将从55.6亿降至约30亿（累计损失45%），而股价锚定净资产，股东将承受45%的永久性资本损失。",
+          "**第三：商誉+无形资产+墓地存货（合计17.5亿，占总资产72%）一次性减值超过50%（约8.75亿）**。这将导致净资产从55.6亿直接腰斩至约47亿，同时确认巨额亏损（可能触发债务契约或融资成本上升），形成\"减值→融资恶化→再减值\"的死亡螺旋。2025H1已减值2.18亿，若再有2-3次类似规模的减值，将触发不可逆的资产负债表崩溃。",
+          "**第四：实际控制人白晓江及一致行动人大幅减持或关联交易掏空**。若内部人在股价\"高估\"时大量减持（如质押融资后股价暴跌），或通过关联采购/服务转移利润，外部股东将承担全部损失。当前分红超额本质上是小规模的\"掏空\"，若规模扩大或转向前述更恶劣的形式，投资价值归零。当前股价HKD 2.64，市值约60亿，若内部人减持10%以上，将是强烈的\"用脚投票\"信号。",
+          "**综合判断：当前已是边缘不可投资状态**。三个致命因素叠加：①基本面断崖（收入-44%，主业亏损）；②资本消耗加速（分红超过现金流）；③政策风险未被充分定价（市价未反映政策完全转向的可能性）。即使不考虑最坏情景，基于当前趋势（收入每年-20%→-30%，分红持续掏空），5年后净资产将从55.6亿降至约25-30亿，股价锚定净资产将同步下跌50%+，且期间无任何分红补偿（因为资本耗尽后分红必然停止）。这不是\"价值投资机会\"，而是\"价值陷阱\"的教科书案例。"
+        ]
+      }
+    },
+    "committee": {
+      "meta": {
+        "agent_name": "committee",
+        "timestamp": "2026-03-27T11:34:22.909293+00:00",
+        "model_used": "MiniMax-M2.7-highspeed",
+        "token_usage": 13190
+      },
+      "output": {
+        "stop_signal": null,
+        "final_label": "TOO_HARD",
+        "thesis": "福寿园具备若干表面吸引力：净现金状态（~25.5亿元）、老龄化驱动的长期殡葬需求刚性、以及政府审批形成的行业进入壁垒。然而，这些表层优势被深层结构性恶化所抵消：核心业务墓地服务（占收入86%）正经历需求实质性萎缩（2025H1收入-44%），毛利率从52%骤降至30%，商誉及资产减值连续大规模确认，分红政策严重透支现金流。短期现金充裕是假象——若维持当前分红（每年7亿+），存量资本将在3-4年内耗尽。",
+        "anti_thesis": "存在三大致命风险可能造成永久性资本损失：①**政策存在性风险**：若国家强制推进全面火葬（当前火葬率约50%），公司86%收入归零，实质破产；②**资本耗尽螺旋**：分红超过经营现金流，2025H1极端背离（分红5.6亿 vs CFO 0.57亿），存量资本正以每年5-7亿速度消耗；③**商誉炸弹**：17亿+资产（商誉+无形资产+存货）面临持续减值风险，历史高溢价收购整合效果存疑。此外，财务数据存在可信度疑点（SGA费用异常、AR骤降68%同时ECL冲回），管理层激励扭曲（帝国建设式并购、分红掏空），市场共识基于\"高股息防御\"的错误叙事。",
+        "largest_unknowns": [
+          "收入下滑的根本驱动因素：需求结构性萎缩（消费降级/替代葬式普及）还是政策压制？这决定了下滑是一次性还是持续性",
+          "墓地资源储备的详细情况：现有墓园可售年限、新墓园开发计划及审批可能性？这决定了核心资产的生命周期",
+          "分红政策可持续性及管理层意图：2025H1极端分红背后是战略安排还是掏空行为？实际控制人白晓江的控制权稳定性？",
+          "商誉减值充分性：当前9.4亿商誉是否已充分减值？历史收购的协同效应是否真实存在？",
+          "地理收入分布及监管环境差异：收入集中度如何？各地殡葬政策差异对公司影响？"
+        ],
+        "expected_return_summary": "基于normalised盈利法和FCF收益率法，预期回报区间熊市7%/基准10%/牛市14%（摩擦调整后5.5%/8%/11.5%）。基准情景勉强接近10%门槛，但存在重大偏差风险。核心问题：当前\"净现金\"是假安全垫——现金正以每年5-7亿速度消耗（分红-经营现金流），商誉/无形资产可能还有5-10亿减值空间。若政策风险兑现（概率未知但非可忽略），将损失全部或大部分投资；若分红被迫削减（几乎必然），股价将面临双重打击（股息率下降+估值重估）。综合期望值可能为负或极低。",
+        "why_now_or_why_not_now": "**现在不应该行动**。理由：1）基本面正在断崖式恶化，2025H1是灾难性的（-44%收入，经营现金流趋近于零），但\"已知\"仅反映在价格中的跌幅有限；2）最大未知项（政策方向、资产减值充分性、资本消耗速度）无法通过公开信息解决，需要内部渠道或等待数季度数据验证；3）分红政策的\"加速消耗资本\"特征意味着每拖延一个季度，存量安全垫更薄；4）当前价格未提供足够风险补偿——熊市回报7%在政策/分红风险面前明显不足；5）存在大量\"未知\"的致命一击，市场可能尚未充分定价。时机判断：应等待①2025全年业绩明朗（验证下滑是周期性还是结构性）；②分红政策是否调整；③商誉减值测试结果；④墓地政策明确信号。",
+        "next_action": "**建议：WATCHLIST（观察清单），不急于深入研究**。理由：该公司是一个\"TOO_HARD\"类型——可能是好公司但当前无法形成有信心的判断。关键问题无法通过公开数据解决：①收入下滑的真实原因（竞争/政策/周期）需要内部信息或更长时间验证；②管理层动机和资本分配理性无法从外部判断；③政策风险（行业存在性）是系统性的黑天鹅，无法对冲。**具体行动**：1）加入观察清单，每季度跟踪收入趋势、毛利率变化、分红政策；2）若2025全年业绩确认\"周期性底部\"且分红政策调整，再重新评估；3）若有内部渠道验证资产质量和政策走向，可升级为DEEP_DIVE；4）若出现更深的跌幅（如P/B<0.8且分红削减预期形成），可能触发Special Situation关注。当前阶段，保留研究资源等待更好的时机或更清晰的信息。"
+      }
+    }
+  }
+}
