@@ -102,12 +102,51 @@ def _accounting_risk_red() -> dict:
     }
 
 
-# 4 agents: info_capture -> filing -> triage (pass) -> accounting_risk (RED -> stop)
+# A generic response that works for any agent that accepts tool_use
+def _generic_agent_response() -> dict:
+    return {
+        "pass_minimum_standard": True,
+        "scores": {"per_share_growth": 5, "return_on_capital": 5, "cash_conversion": 5,
+                   "leverage_safety": 5, "capital_allocation": 5, "moat_financial_trace": 5},
+        "key_strengths": [], "key_failures": [], "should_continue": "continue",
+        # net_cash fields
+        "net_cash": 1.0, "net_cash_to_market_cap": 0.1, "attention_level": "NORMAL",
+        "dividend_profile": {"pays_dividend": False, "coverage_ratio": None},
+        "buyback_profile": {"has_buyback": False, "shares_reduced": False},
+        "cash_quality_notes": [],
+        # valuation fields
+        "valuation_method": ["normalized_earnings"], "meets_hurdle_rate": False,
+        "expected_lookthrough_return": {"bear": 0.05, "base": 0.08, "bull": 0.12},
+        "friction_adjusted_return": {"bear": 0.03, "base": 0.06, "bull": 0.10},
+        "notes": [],
+        # mental model fields
+        "industry_structure": "", "moat_type": [], "pricing_power_position": "", "moat_trend": "stable",
+        "compounding_engine": "", "incremental_return_on_capital": "",
+        "sustainability_period": "", "per_share_value_growth_logic": "",
+        "management_incentive_distortion": "", "market_sentiment_bias": "",
+        "narrative_vs_fact_divergence": "",
+        "single_points_of_failure": [], "fragility_sources": [],
+        "fault_tolerance": "", "system_resilience": "",
+        "ecological_niche": "", "adaptability_trend": "",
+        "cyclical_vs_structural": "", "long_term_survival_probability": "",
+    }
+
+
+# 3 sequential + 9 parallel: info_capture, filing, triage, then
+# accounting_risk + financial_quality + net_cash + valuation + 5 mental models
 _RESPONSES = [
-    _info_capture,
-    _filing,
-    _triage_pass,
-    _accounting_risk_red,
+    _info_capture,       # info_capture
+    _filing,             # filing
+    _triage_pass,        # triage
+    _accounting_risk_red,  # accounting_risk (RED)
+    _generic_agent_response,  # financial_quality
+    _generic_agent_response,  # net_cash
+    _generic_agent_response,  # valuation
+    _generic_agent_response,  # moat
+    _generic_agent_response,  # compounding
+    _generic_agent_response,  # psychology
+    _generic_agent_response,  # systems
+    _generic_agent_response,  # ecology
 ]
 
 
@@ -150,17 +189,19 @@ async def test_pipeline_stop_at_accounting_risk():
         market_fetcher=_mock_market_fetcher(),
     )
 
-    # Pipeline should be stopped
+    # Pipeline should be stopped at gate check (after parallel batch)
     assert ctx.is_stopped()
     assert "Accounting risk RED" in ctx.stop_reason
 
-    # Only first 4 agents should have run
+    # Parallel batch: all 9 analysis agents run together, then gate stops
     completed = ctx.completed_agents()
-    assert completed == ["info_capture", "filing", "triage", "accounting_risk"]
+    assert "info_capture" in completed
+    assert "filing" in completed
+    assert "triage" in completed
+    assert "accounting_risk" in completed
+    # These also ran (parallel batch) but gate stops after
+    assert "financial_quality" in completed
 
-    # No agents after accounting_risk
-    assert "financial_quality" not in completed
+    # Critic and Committee should NOT have run (gate stopped before them)
+    assert "critic" not in completed
     assert "committee" not in completed
-
-    # LLM called exactly 4 times
-    assert llm.create_message.call_count == 4

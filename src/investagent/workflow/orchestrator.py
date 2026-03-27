@@ -95,36 +95,14 @@ async def run_pipeline(
         ctx.stop(reason)
         return ctx
 
-    # Stage 4: Accounting Risk
-    await run_agent(AccountingRiskAgent(llm), intake, ctx)
-    if ctx.is_stopped():
-        return ctx
-    proceed, reason = check_accounting_risk_gate(ctx)
-    if not proceed:
-        ctx.stop(reason)
-        return ctx
-
-    # Stage 5: Financial Quality
-    await run_agent(FinancialQualityAgent(llm), intake, ctx)
-    if ctx.is_stopped():
-        return ctx
-    proceed, reason = check_financial_quality_gate(ctx)
-    if not proceed:
-        ctx.stop(reason)
-        return ctx
-
-    # Stage 6: Net Cash
-    await run_agent(NetCashAgent(llm), intake, ctx)
-    if ctx.is_stopped():
-        return ctx
-
-    # Stage 7: Valuation
-    await run_agent(ValuationAgent(llm), intake, ctx)
-    if ctx.is_stopped():
-        return ctx
-
-    # Stage 8: Mental Models (parallel)
+    # Stage 4-8: Parallel analysis (all depend on Filing, not each other)
+    # AccountingRisk + FinancialQuality + NetCash + Valuation + 5 Mental Models
+    # = 9 agents running simultaneously
     await asyncio.gather(
+        run_agent(AccountingRiskAgent(llm), intake, ctx),
+        run_agent(FinancialQualityAgent(llm), intake, ctx),
+        run_agent(NetCashAgent(llm), intake, ctx),
+        run_agent(ValuationAgent(llm), intake, ctx),
         run_agent(MoatAgent(llm), intake, ctx),
         run_agent(CompoundingAgent(llm), intake, ctx),
         run_agent(PsychologyAgent(llm), intake, ctx),
@@ -134,7 +112,17 @@ async def run_pipeline(
     if ctx.is_stopped():
         return ctx
 
-    # Stage 9: Critic
+    # Post-parallel gate checks
+    proceed, reason = check_accounting_risk_gate(ctx)
+    if not proceed:
+        ctx.stop(reason)
+        return ctx
+    proceed, reason = check_financial_quality_gate(ctx)
+    if not proceed:
+        ctx.stop(reason)
+        return ctx
+
+    # Stage 9: Critic (needs all upstream outputs)
     await run_agent(CriticAgent(llm), intake, ctx)
     if ctx.is_stopped():
         return ctx
