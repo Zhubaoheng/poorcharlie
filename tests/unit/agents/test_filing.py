@@ -217,6 +217,38 @@ async def test_filing_meta_is_server_generated():
 
 
 # ---------------------------------------------------------------------------
+# Unit scale fix
+# ---------------------------------------------------------------------------
+
+def test_fix_unit_scale():
+    """Cross-year unit inconsistency: some years' revenue scaled wrong."""
+    from investagent.agents.filing import _fix_unit_scale
+    from investagent.schemas.filing import IncomeStatementRow
+
+    rows = [
+        IncomeStatementRow(fiscal_year="2019", fiscal_period="FY", revenue=3768e8, net_income=802e8),
+        IncomeStatementRow(fiscal_year="2020", fiscal_period="FY", revenue=5097e8, net_income=1403e8),
+        IncomeStatementRow(fiscal_year="2021", fiscal_period="FY", revenue=7172e8, net_income=1432e8),
+        # These are 1000x too small
+        IncomeStatementRow(fiscal_year="2022", fiscal_period="FY", revenue=8.5e8, net_income=0.5e8),
+        IncomeStatementRow(fiscal_year="2023", fiscal_period="FY", revenue=8.7e8, net_income=0.7e8),
+        IncomeStatementRow(fiscal_year="2024", fiscal_period="FY", revenue=9.4e8, net_income=0.7e8),
+    ]
+
+    fixed = _fix_unit_scale(rows, "revenue")
+
+    # 2022-2024 should be scaled up — within 5x of median now
+    median_rev = sorted(r.revenue for r in fixed if r.revenue)[len(fixed) // 2]
+    for r in fixed:
+        if r.fiscal_year in ("2022", "2023", "2024"):
+            ratio = median_rev / r.revenue
+            assert ratio < 10, f"{r.fiscal_year} revenue={r.revenue} still too far from median (ratio={ratio:.0f}x)"
+        # 2019-2021 should be unchanged
+        if r.fiscal_year == "2019":
+            assert r.revenue == 3768e8
+
+
+# ---------------------------------------------------------------------------
 # Validation + retry
 # ---------------------------------------------------------------------------
 

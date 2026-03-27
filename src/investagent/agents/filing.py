@@ -40,6 +40,57 @@ _CRITICAL_EXTRA = ("shares_basic",)  # checked across all IS rows
 _NULL_RATE_THRESHOLD = 0.30  # >30% null triggers retry
 _TARGET_ANNUAL_REPORTS = 5  # 5 years of annual reports
 _MAX_INTERIM = 1  # plus latest interim for most recent data
+_UNIT_SCALE_THRESHOLD = 50  # if a value is 50x smaller than median, likely unit error
+
+
+def _fix_unit_scale(rows: list[Any], field: str) -> list[Any]:
+    """Fix cross-year unit inconsistencies.
+
+    If some rows' `field` value is 50x+ smaller than the median,
+    multiply them by the nearest power of 1000 to align.
+    This catches LLM extracting "868,687" (millions) as 868687
+    instead of 868,687,000,000.
+    """
+    values = [
+        (i, getattr(r, field, None))
+        for i, r in enumerate(rows)
+        if getattr(r, field, None) is not None and getattr(r, field) > 0
+    ]
+    if len(values) < 3:
+        return rows  # not enough data to detect anomalies
+
+    nums = sorted(v for _, v in values)
+    median = nums[len(nums) // 2]
+
+    if median == 0:
+        return rows
+
+    fixed = list(rows)
+    for idx, val in values:
+        ratio = median / val
+        if ratio > _UNIT_SCALE_THRESHOLD:
+            # Find the right multiplier: 1000, 1000000, etc.
+            multiplier = 1
+            while val * multiplier * 10 < median:
+                multiplier *= 10
+            # Round to nearest power of 10
+            if multiplier >= 10:
+                new_val = val * multiplier
+                # Apply to ALL numeric fields in this row, not just the anchor
+                row = fixed[idx]
+                updates: dict[str, Any] = {}
+                for f in type(row).model_fields:
+                    v = getattr(row, f, None)
+                    if isinstance(v, (int, float)) and v != 0 and f != "fiscal_year":
+                        updates[f] = v * multiplier
+                fixed[idx] = row.model_copy(update=updates)
+                logger.info(
+                    "Unit fix: %s row %s scaled by %dx (%s: %s → %s)",
+                    field, getattr(row, "fiscal_year", "?"),
+                    multiplier, field, val, new_val,
+                )
+
+    return fixed
 
 
 class FilingAgent(BaseAgent):
@@ -415,9 +466,22 @@ class FilingAgent(BaseAgent):
                 updates["free_cash_flow"] = row.operating_cash_flow - abs(row.capex)
             new_cf.append(row.model_copy(update=updates) if updates else row)
 
-        if new_is != list(output.income_statement) or new_cf != list(output.cash_flow):
+        # Cross-year unit consistency check
+        # If some years' revenue is 50x+ smaller than median, LLM forgot
+        # to convert units (e.g., "868,687" in millions vs "868687000000")
+        new_is = _fix_unit_scale(new_is, "revenue")
+        new_bs = _fix_unit_scale(list(output.balance_sheet), "total_assets")
+        new_cf = _fix_unit_scale(new_cf, "operating_cash_flow")
+
+        changed = (
+            new_is != list(output.income_statement)
+            or new_cf != list(output.cash_flow)
+            or new_bs != list(output.balance_sheet)
+        )
+        if changed:
             return output.model_copy(update={
                 "income_statement": new_is,
+                "balance_sheet": new_bs,
                 "cash_flow": new_cf,
             })
         return output
