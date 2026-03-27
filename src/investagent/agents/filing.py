@@ -255,12 +255,22 @@ class FilingAgent(BaseAgent):
         if len(outputs) == 1:
             return outputs[0]
 
-        # For quantitative: first-seen wins (outputs[0] is newest)
+        # For quantitative: keep the row with the MOST non-null fields.
+        # When a year appears in multiple reports, the one from its own
+        # annual report is typically more complete than as a prior-year
+        # comparative in a newer report.
+        def _count_filled(row: Any) -> int:
+            if hasattr(row, "model_dump"):
+                d = row.model_dump()
+            else:
+                d = row if isinstance(row, dict) else {}
+            return sum(1 for v in d.values() if v is not None)
+
         def _dedup_rows(all_rows: list, key_fn) -> list:
             seen: dict[str, Any] = {}
             for row in all_rows:
                 k = key_fn(row)
-                if k not in seen:
+                if k not in seen or _count_filled(row) > _count_filled(seen[k]):
                     seen[k] = row
             return list(seen.values())
 

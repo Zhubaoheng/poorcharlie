@@ -162,6 +162,41 @@ async def test_filing_dedup_prefers_newer(mock_sections, mock_pdf):
     assert row_2023.revenue == 2.5e9  # from newer report
 
 
+@patch("investagent.agents.filing.extract_pdf_markdown", return_value="text")
+@patch("investagent.agents.filing.extract_sections", return_value={"income_statement": "data"})
+async def test_filing_dedup_prefers_more_complete(mock_sections, mock_pdf):
+    """When newer report has sparse prior-year data, older report's complete row wins."""
+    # 2024 report has sparse 2023 data (only revenue, no net_income)
+    newer = _filing_tool_input("2024")
+    newer["income_statement"][1] = {
+        "fiscal_year": "2023", "fiscal_period": "FY",
+        "revenue": 2.5e9, "net_income": None,  # sparse!
+    }
+
+    # 2023 report has complete 2023 data
+    older = _filing_tool_input("2023")
+    older["income_statement"][0] = {
+        "fiscal_year": "2023", "fiscal_period": "FY",
+        "revenue": 2.5e9, "net_income": 7e8, "shares_basic": 3e9,
+        "operating_income": 1e9, "tax_provision": 2e8,
+    }
+
+    llm = _mock_llm()
+    llm.create_message = AsyncMock(side_effect=[
+        _mock_response(newer),
+        _mock_response(older),
+    ])
+
+    docs = [_make_filing_doc("2024"), _make_filing_doc("2023")]
+    ctx = _make_ctx(docs)
+    agent = FilingAgent(llm)
+    result = await agent.run(_intake(), ctx)
+
+    # 2023 row should come from older report (more fields filled)
+    row_2023 = next(r for r in result.income_statement if r.fiscal_year == "2023")
+    assert row_2023.net_income == 7e8  # from complete older row
+
+
 async def test_filing_no_context():
     llm = _mock_llm()
     llm.create_message = AsyncMock(return_value=_mock_response(_filing_tool_input()))
