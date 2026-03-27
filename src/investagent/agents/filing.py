@@ -347,17 +347,19 @@ class FilingAgent(BaseAgent):
 
     @staticmethod
     def _compute_derived_fields(output: FilingOutput) -> FilingOutput:
-        """Fill computable fields from available data. Pure arithmetic, no LLM.
+        """Fill computable fields and fix unit errors. Pure arithmetic, no LLM.
 
-        - gross_profit = revenue - cost_of_revenue
-        - eps_basic = net_income / shares_basic (or net_income_to_parent)
-        - eps_diluted = net_income / shares_diluted
-        - free_cash_flow = operating_cash_flow - capex
-        - shares_basic from net_income / eps_basic (if eps known but shares not)
+        Derives: gross_profit, eps, shares, free_cash_flow.
+        Fixes: fiscal_period normalization, shares unit sanity check.
         """
         new_is: list[Any] = []
         for row in output.income_statement:
             updates: dict[str, Any] = {}
+
+            # Normalize fiscal_period: "FY2023" → "FY", "H12025" → "H1"
+            fp = getattr(row, "fiscal_period", "FY") or "FY"
+            if len(fp) > 2 and fp[:2] in ("FY", "H1", "Q1", "Q2", "Q3", "Q4"):
+                updates["fiscal_period"] = fp[:2]
 
             rev = row.revenue
             cor = row.cost_of_revenue
@@ -383,6 +385,15 @@ class FilingAgent(BaseAgent):
                 src = ni_parent if ni_parent is not None else ni
                 if src is not None:
                     updates["shares_diluted"] = round(src / eps_d)
+
+            # Shares sanity check: if shares < 100M but net_income > 100M,
+            # likely a unit error (thousands/万 vs actual shares)
+            if sh_b is not None and ni is not None and sh_b < 1e8 and abs(ni) > 1e8:
+                updates["shares_basic"] = sh_b * 100
+                sh_b = updates["shares_basic"]
+            if sh_d is not None and ni is not None and sh_d < 1e8 and abs(ni) > 1e8:
+                updates["shares_diluted"] = sh_d * 100
+                sh_d = updates["shares_diluted"]
 
             # eps from shares: eps = net_income / shares
             if eps_b is None and sh_b is not None and sh_b != 0:
