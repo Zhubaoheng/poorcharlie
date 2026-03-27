@@ -38,8 +38,8 @@ _CRITICAL_CF_FIELDS = ("operating_cash_flow",)
 _CRITICAL_EXTRA = ("shares_basic",)  # checked across all IS rows
 
 _NULL_RATE_THRESHOLD = 0.30  # >30% null triggers retry
-_TARGET_YEARS = 5
-_MAX_FILINGS = 3
+_TARGET_ANNUAL_REPORTS = 5  # 5 years of annual reports
+_MAX_INTERIM = 1  # plus latest interim for most recent data
 
 
 class FilingAgent(BaseAgent):
@@ -245,11 +245,17 @@ class FilingAgent(BaseAgent):
 
     @staticmethod
     def _merge_filing_outputs(outputs: list[FilingOutput]) -> FilingOutput:
-        """Merge FilingOutputs from multiple reports, preferring newer data."""
+        """Merge FilingOutputs from multiple reports.
+
+        For quantitative rows (three statements, segments): deduplicate by
+        fiscal_year, preferring data from the newer report.
+        For qualitative content (accounting policies, footnotes, risk factors):
+        keep ALL entries from every report — each year's narrative is unique.
+        """
         if len(outputs) == 1:
             return outputs[0]
 
-        # outputs[0] is from the newest report — its data is preferred
+        # For quantitative: first-seen wins (outputs[0] is newest)
         def _dedup_rows(all_rows: list, key_fn) -> list:
             seen: dict[str, Any] = {}
             for row in all_rows:
@@ -258,21 +264,32 @@ class FilingAgent(BaseAgent):
                     seen[k] = row
             return list(seen.values())
 
-        # Collect all rows, newest report first (already ordered)
+        # Collect rows, newest report first
         all_is = [r for o in outputs for r in o.income_statement]
         all_bs = [r for o in outputs for r in o.balance_sheet]
         all_cf = [r for o in outputs for r in o.cash_flow]
         all_seg = [r for o in outputs for r in o.segments]
-        all_ap = [r for o in outputs for r in o.accounting_policies]
-        all_si = [r for o in outputs for r in o.special_items]
-        all_fn = [r for o in outputs for r in o.footnote_extracts]
         all_buy = [r for o in outputs for r in o.buyback_history]
         all_acq = [r for o in outputs for r in o.acquisition_history]
-        all_div = []
-        for o in outputs:
-            all_div.extend(o.dividend_per_share_history)
 
-        # Merge filing_meta
+        # Qualitative: keep ALL (each report's narrative is unique)
+        all_ap = [p for o in outputs for p in o.accounting_policies]
+        all_si = [s for o in outputs for s in o.special_items]
+        all_fn = [f for o in outputs for f in o.footnote_extracts]
+        all_rf = [r for o in outputs for r in o.risk_factors]
+        all_div = [d for o in outputs for d in o.dividend_per_share_history]
+
+        # Debt: collect from all reports (different years have different loans)
+        all_debt = [d for o in outputs for d in o.debt_schedule]
+        all_cov = [c for o in outputs for c in o.covenant_status]
+
+        # Concentration: newest non-None
+        concentration = next(
+            (o.concentration for o in outputs if o.concentration is not None),
+            None,
+        )
+
+        # Filing meta: union of years and types
         newest = outputs[0]
         all_years = sorted(set(
             y for o in outputs for y in o.filing_meta.fiscal_years_covered
@@ -295,25 +312,57 @@ class FilingAgent(BaseAgent):
                 "fiscal_years_covered": all_years,
                 "filing_types": all_types,
             }),
+            # Quantitative: dedup by year (newer report preferred)
             income_statement=_dedup_rows(all_is, lambda r: f"{r.fiscal_year}_{getattr(r, 'fiscal_period', 'FY')}"),
             balance_sheet=_dedup_rows(all_bs, lambda r: r.fiscal_year),
             cash_flow=_dedup_rows(all_cf, lambda r: r.fiscal_year),
             segments=_dedup_rows(all_seg, lambda r: f"{r.fiscal_year}_{r.segment_name}"),
-            accounting_policies=_dedup_rows(all_ap, lambda r: f"{r.category}_{r.fiscal_year}"),
-            debt_schedule=newest.debt_schedule,
-            covenant_status=newest.covenant_status,
-            special_items=_dedup_rows(all_si, lambda r: f"{r.fiscal_year}_{r.description[:30]}"),
-            concentration=newest.concentration,
             buyback_history=_dedup_rows(all_buy, lambda r: r.fiscal_year),
             acquisition_history=_dedup_rows(all_acq, lambda r: f"{r.fiscal_year}_{getattr(r, 'target', '')}"),
+            # Qualitative: keep all (unique per report year)
+            accounting_policies=all_ap,
+            special_items=all_si,
+            footnote_extracts=all_fn,
+            risk_factors=all_rf,
             dividend_per_share_history=all_div,
-            footnote_extracts=_dedup_rows(all_fn, lambda r: f"{r.topic}_{r.fiscal_year}"),
-            risk_factors=newest.risk_factors,
+            # Debt: keep all instruments
+            debt_schedule=all_debt,
+            covenant_status=all_cov,
+            concentration=concentration,
         )
 
     # ------------------------------------------------------------------
     # Main entry point
     # ------------------------------------------------------------------
+
+    async def _process_one_filing(self, doc: FilingDocument) -> FilingOutput | None:
+        """Download, extract, validate, and optionally retry one filing."""
+        logger.info("Processing %s %s", doc.filing_type, doc.fiscal_year)
+
+        sections = await self._download_one(doc)
+        if not sections:
+            logger.warning("No sections extracted from %s %s", doc.filing_type, doc.fiscal_year)
+            return None
+
+        output = await self._extract_from_single_filing(sections, doc.fiscal_year)
+        if output is None:
+            logger.warning("LLM extraction failed for %s %s", doc.filing_type, doc.fiscal_year)
+            return None
+
+        # Validation + retry
+        problems = self._validate_extraction(output)
+        if problems:
+            logger.info(
+                "%s %s: %d critical nulls, retrying",
+                doc.filing_type, doc.fiscal_year, len(problems),
+            )
+            retry_output = await self._retry_with_hints(sections, doc.fiscal_year, problems)
+            if retry_output is not None:
+                retry_problems = self._validate_extraction(retry_output)
+                if len(retry_problems) < len(problems):
+                    output = retry_output
+
+        return output
 
     async def run(
         self, input_data: BaseModel, ctx: Any = None,
@@ -334,8 +383,8 @@ class FilingAgent(BaseAgent):
             except KeyError:
                 pass
 
-        # Filter to annual reports, sort newest first
-        annual_docs = sorted(
+        # Split: annual reports + latest interim
+        annuals = sorted(
             [
                 d for d in filing_docs
                 if d.fiscal_period == "FY"
@@ -344,50 +393,41 @@ class FilingAgent(BaseAgent):
             ],
             key=lambda d: d.fiscal_year,
             reverse=True,
+        )[:_TARGET_ANNUAL_REPORTS]
+
+        interims = sorted(
+            [
+                d for d in filing_docs
+                if d.fiscal_period == "H1"
+                or "Interim" in d.filing_type
+                or "半年" in d.filing_type
+            ],
+            key=lambda d: d.fiscal_year,
+            reverse=True,
+        )[:_MAX_INTERIM]
+
+        docs_to_process = annuals + interims
+        if not docs_to_process:
+            docs_to_process = sorted(filing_docs, key=lambda d: d.fiscal_year, reverse=True)[:3]
+
+        logger.info(
+            "Processing %d filings in parallel (%d annual + %d interim)",
+            len(docs_to_process), len(annuals), len(interims),
         )
-        if not annual_docs:
-            annual_docs = sorted(filing_docs, key=lambda d: d.fiscal_year, reverse=True)
 
-        # Process filings one at a time until we have enough year coverage
+        # Process ALL filings in parallel — each gets its own full LLM call
+        import asyncio
+        tasks = [self._process_one_filing(doc) for doc in docs_to_process]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
         partial_outputs: list[FilingOutput] = []
-        covered_years: set[str] = set()
+        for i, result in enumerate(results):
+            if isinstance(result, FilingOutput):
+                partial_outputs.append(result)
+            elif isinstance(result, Exception):
+                logger.warning("Filing %s failed: %s", docs_to_process[i].fiscal_year, result)
 
-        for doc in annual_docs[:_MAX_FILINGS]:
-            logger.info("Processing %s %s", doc.filing_type, doc.fiscal_year)
-
-            sections = await self._download_one(doc)
-            if not sections:
-                logger.warning("No sections extracted from %s %s", doc.filing_type, doc.fiscal_year)
-                continue
-
-            output = await self._extract_from_single_filing(sections, doc.fiscal_year)
-            if output is None:
-                logger.warning("LLM extraction failed for %s %s", doc.filing_type, doc.fiscal_year)
-                continue
-
-            # Validation + retry
-            problems = self._validate_extraction(output)
-            if problems:
-                logger.info("Validation found %d issues, retrying with hints", len(problems))
-                retry_output = await self._retry_with_hints(sections, doc.fiscal_year, problems)
-                if retry_output is not None:
-                    # Use retry if it has fewer null critical fields
-                    retry_problems = self._validate_extraction(retry_output)
-                    if len(retry_problems) < len(problems):
-                        output = retry_output
-
-            partial_outputs.append(output)
-
-            # Track year coverage
-            for row in output.income_statement:
-                covered_years.add(row.fiscal_year)
-            for row in output.balance_sheet:
-                covered_years.add(row.fiscal_year)
-
-            if len(covered_years) >= _TARGET_YEARS:
-                break
-
-        # Fallback: if no filings produced output, make one empty LLM call
+        # Fallback: if nothing worked, one empty LLM call
         if not partial_outputs:
             self._current_sections = {}
             self._current_year = ""
@@ -396,7 +436,7 @@ class FilingAgent(BaseAgent):
                 raise AgentOutputError(f"{self.name}: all extraction attempts failed")
             partial_outputs.append(fallback)
 
-        # Merge
+        # Merge — newest first (already sorted)
         result = self._merge_filing_outputs(partial_outputs)
 
         # Inject market_currency from info_capture
