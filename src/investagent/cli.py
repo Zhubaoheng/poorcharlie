@@ -18,7 +18,7 @@ from pathlib import Path
 
 from investagent.config import Settings
 from investagent.llm import LLMClient
-from investagent.report import generate_report
+from investagent.report import generate_debug_log, generate_report
 from investagent.schemas.company import CompanyIntake
 from investagent.workflow.orchestrator import run_pipeline
 
@@ -123,13 +123,19 @@ async def _run(args: argparse.Namespace) -> None:
     elapsed = time.time() - t0
 
     report = generate_report(ctx, elapsed=elapsed)
+    debug_log = generate_debug_log(ctx, elapsed=elapsed)
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = time.strftime("%Y%m%d_%H%M%S")
-    filename = f"{ticker}_{timestamp}.md"
-    output_path = output_dir / filename
-    output_path.write_text(report, encoding="utf-8")
+
+    # Save Markdown report
+    report_path = output_dir / f"{ticker}_{timestamp}.md"
+    report_path.write_text(report, encoding="utf-8")
+
+    # Save JSON debug log (full agent input/output, no truncation)
+    log_path = output_dir / f"{ticker}_{timestamp}_debug.json"
+    log_path.write_text(debug_log, encoding="utf-8")
 
     print(f"\n完成: {len(ctx.completed_agents())} 个 Agent | {elapsed:.0f}s")
 
@@ -140,7 +146,8 @@ async def _run(args: argparse.Namespace) -> None:
         if committee:
             print(f"结论: {committee.final_label.value}")
 
-    print(f"报告: {output_path}")
+    print(f"报告: {report_path}")
+    print(f"日志: {log_path}")
 
 
 def main() -> None:

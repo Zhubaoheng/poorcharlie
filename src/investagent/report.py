@@ -179,7 +179,7 @@ def _render_accounting_risk(r: Any) -> str:
         for c in r.major_accounting_changes:
             lines.append(f"- {c}")
     if r.comparability_impact:
-        lines.append(f"\n> {r.comparability_impact[:300]}")
+        lines.append(f"\n> {r.comparability_impact}")
     return "\n".join(lines)
 
 
@@ -238,11 +238,14 @@ def _render_mental_model(name: str, title: str, r: Any) -> str:
     lines = [f"### {title}\n"]
     data = r.model_dump(exclude={"meta", "stop_signal"}, mode="json")
     for key, value in data.items():
-        if isinstance(value, str) and len(value) > 200:
-            value = value[:200] + "..."
-        elif isinstance(value, list):
-            value = "; ".join(str(v)[:80] for v in value[:5])
-        lines.append(f"- **{key}**: {value}")
+        if isinstance(value, list):
+            lines.append(f"\n**{key}**:\n")
+            for item in value:
+                lines.append(f"- {item}")
+        elif isinstance(value, str):
+            lines.append(f"\n**{key}**:\n\n{value}\n")
+        else:
+            lines.append(f"- **{key}**: {value}")
     return "\n".join(lines)
 
 
@@ -250,13 +253,21 @@ def _render_critic(r: Any) -> str:
     lines = ["## Stage 9: Critic（批评家）\n"]
     lines.append("### Kill Shots\n")
     for i, ks in enumerate(r.kill_shots, 1):
-        lines.append(f"{i}. {ks[:200]}")
-    lines.append("\n### 永久性资本损失风险\n")
+        lines.append(f"{i}. {ks}\n")
+    lines.append("### 永久性资本损失风险\n")
     for risk in r.permanent_loss_risks:
-        lines.append(f"- {risk[:150]}")
-    lines.append("\n### 护城河摧毁路径\n")
+        lines.append(f"- {risk}\n")
+    lines.append("### 护城河摧毁路径\n")
     for path in r.moat_destruction_paths:
-        lines.append(f"- {path[:150]}")
+        lines.append(f"- {path}\n")
+    if hasattr(r, "management_failure_modes") and r.management_failure_modes:
+        lines.append("### 管理层失败模式\n")
+        for mode in r.management_failure_modes:
+            lines.append(f"- {mode}\n")
+    if hasattr(r, "what_would_make_this_uninvestable") and r.what_would_make_this_uninvestable:
+        lines.append("### 什么条件下不可投资\n")
+        for cond in r.what_would_make_this_uninvestable:
+            lines.append(f"- {cond}\n")
     return "\n".join(lines)
 
 
@@ -350,3 +361,49 @@ def generate_report(
         parts.append(_render_committee(committee))
 
     return "\n".join(parts)
+
+
+def generate_debug_log(
+    ctx: PipelineContext,
+    elapsed: float | None = None,
+) -> str:
+    """Generate a JSON debug log with full input/output for every agent.
+
+    This is the machine-readable companion to the Markdown report.
+    Every agent's complete output is preserved without truncation.
+    """
+    intake = ctx.intake
+    completed = ctx.completed_agents()
+
+    log: dict[str, Any] = {
+        "company": intake.model_dump(),
+        "timestamp": datetime.now().isoformat(),
+        "elapsed_seconds": round(elapsed, 1) if elapsed else None,
+        "stopped": ctx.is_stopped(),
+        "stop_reason": ctx.stop_reason,
+        "completed_agents": completed,
+        "total_tokens": 0,
+        "agents": {},
+    }
+
+    total_tokens = 0
+    for name in completed:
+        result = _safe_get(ctx, name)
+        if result is None:
+            continue
+
+        tokens = result.meta.token_usage
+        total_tokens += tokens
+
+        log["agents"][name] = {
+            "meta": {
+                "agent_name": result.meta.agent_name,
+                "timestamp": result.meta.timestamp.isoformat(),
+                "model_used": result.meta.model_used,
+                "token_usage": tokens,
+            },
+            "output": result.model_dump(exclude={"meta"}, mode="json"),
+        }
+
+    log["total_tokens"] = total_tokens
+    return json.dumps(log, ensure_ascii=False, indent=2, default=str)
