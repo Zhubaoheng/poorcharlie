@@ -308,31 +308,77 @@ _SECTION_DEFS_A_SHARE: list[tuple[str, list[str], int]] = [
 ]
 
 _SECTION_DEFS_US_ADR: list[tuple[str, list[str], int]] = [
+    # 20-F ITEM-based matching (handles OCR artifacts like "FINAN CIAL")
     ("mda", [
+        "ITEM 5",        # Operating and Financial Review
+        "ITEM5",
         "Operating and Financial Review",
         "Management Discussion",
-        "Management's Discussion",
-        "Item 5",
-        "OPERATING AND FINANCIAL REVIEW",
-        "BUSINESS OVERVIEW",
-        "MANAGEMENT DISCUSSION",
+        "OPERATING AND FINAN",
     ], 60000),
+    ("risk_factors", [
+        "ITEM 3",        # Key Information (includes Risk Factors)
+        "ITEM3",
+        "Risk Factors",
+        "KEY INFORMATION",
+    ], 30000),
+    ("business_overview", [
+        "ITEM 4",        # Information on the Company
+        "ITEM4",
+        "INFORM ATION ON THE COMPANY",
+    ], 30000),
+    ("remuneration", [
+        "ITEM 6",        # Directors, Senior Management, Employees
+        "ITEM6",
+        "DIRECTORS, SENIOR MANAGEMENT",
+        "Executive Compensation",
+        "Compensation Discussion",
+    ], 30000),
+    ("directors_interests", [
+        "ITEM 7",        # Major Shareholders
+        "ITEM7",
+        "MAJ OR SHAREHOLDERS",
+        "Principal Shareholders",
+    ], 16000),
+    ("governance_risks", [
+        "ITEM 8",        # Financial Information (legal proceedings, dividends)
+        "ITEM8",
+        "F INANCIAL INFORMATION",
+        "Legal Proceedings",
+    ], 16000),
+    ("corporate_structure", [
+        "ITEM 10",       # Additional Information (charter, VIE, taxation)
+        "ITEM10",
+        "A DDITIONAL INFORMATION",
+        "VIE Structure",
+        "Variable Interest",
+    ], 30000),
+    ("audit", [
+        "ITEM 15",       # Controls and Procedures
+        "ITEM15",
+        "CONTROLS AND PROCEDURES",
+        "ITEM 16A",      # Audit Committee Expert
+        "ITEM 16C",      # Principal Accountant Fees
+        "PRINCIPAL ACCOUNTANT",
+    ], 12000),
+    # Financial statements (inside ITEM 18 / after INDEX TO FINANCIAL STATEMENTS)
     ("income_statement", [
         "Consolidated Statements of Operations",
         "Consolidated Statements of Income",
         "Consolidated Income Statement",
         "CONSOLIDATED INCOME STATEMENT",
-        "CONSOLI DATED INCOME",  # EDGAR OCR artifact
+        "CONSOLI DATED INCOME",
     ], 30000),
     ("balance_sheet", [
         "Consolidated Balance Sheet",
         "Consolidated Statements of Financial Position",
         "CONSOLIDATED BALANCE SHEET",
+        "CONSOLIDATED B ALANCE",
     ], 30000),
     ("cash_flow", [
         "Consolidated Statements of Cash Flows",
         "Consolidated Cash Flow Statement",
-        "CONSOLIDATED STA TEMENTS OF CASH FLOWS",  # EDGAR OCR artifact
+        "CONSOLIDATED STA TEMENTS OF CASH FLOWS",
         "CONSOLIDATED STATEMENTS OF CASH FLOWS",
     ], 30000),
     ("accounting_policies", [
@@ -346,42 +392,9 @@ _SECTION_DEFS_US_ADR: list[tuple[str, list[str], int]] = [
         "Segment Reporting",
         "SEGMENT INFORMATION",
     ], 20000),
-    ("risk_factors", [
-        "Risk Factors",
-        "Item 3",
-    ], 16000),
     ("related_party", [
         "Related Party",
     ], 16000),
-    ("remuneration", [
-        "Executive Compensation",
-        "Director Compensation",
-        "Compensation Discussion",
-        "Share Incentive",
-        "Stock Option",
-        "Item 6",
-    ], 20000),
-    ("directors_interests", [
-        "Principal Shareholders",
-        "Major Shareholders",
-        "Security Ownership",
-        "Item 7",
-    ], 12000),
-    ("corporate_structure", [
-        "VIE Structure",
-        "Variable Interest Entit",
-        "Contractual Arrangements",
-    ], 20000),
-    ("audit", [
-        "Key Audit Matters",
-        "Report of Independent",
-        "Auditor",
-    ], 8000),
-    ("governance_risks", [
-        "Legal Proceedings",
-        "Contingencies",
-        "Item 8",
-    ], 8000),
     ("notes_tax", [
         "Income tax",
         "Deferred tax",
@@ -442,10 +455,12 @@ def extract_pdf_markdown(raw_content: bytes) -> str:
 def _split_by_headers(text: str) -> list[tuple[str, str]]:
     """Split text into (header_text, body_text) pairs.
 
-    Supports both markdown headers (## ...) and plain-text ALL-CAPS headers
-    (common in SEC EDGAR filings).
+    Strategy (in priority order):
+    1. Markdown headers (## ...)  — PDF via pymupdf4llm
+    2. ITEM X. pattern           — SEC EDGAR 20-F/10-K format
+    3. ALL-CAPS lines            — Other plain text formats
     """
-    # Try markdown headers first
+    # 1. Markdown headers
     md_pattern = re.compile(r"^(#{1,3})\s+\**(.+?)\**\s*$", re.MULTILINE)
     md_matches = list(md_pattern.finditer(text))
 
@@ -459,8 +474,59 @@ def _split_by_headers(text: str) -> list[tuple[str, str]]:
             sections.append((header, body))
         return sections
 
-    # Fallback: ALL-CAPS lines as section headers (EDGAR plain text)
-    # Match lines that are mostly uppercase, at least 20 chars, standalone
+    # 2. SEC EDGAR "ITEM X." format — handles OCR artifacts like "ITEM 5. OPERATING AND FINAN CIAL"
+    item_pattern = re.compile(
+        r"^(ITEM\s*\d+[A-Z]?\.?\s+[A-Z][A-Z\s\(\)\-\,\.\/\'\:\;]+)$",
+        re.MULTILINE,
+    )
+    item_matches = list(item_pattern.finditer(text))
+
+    if len(item_matches) >= 5:  # Looks like a real 20-F with Items
+        sections = []
+        for i, match in enumerate(item_matches):
+            header = re.sub(r"\s+", " ", match.group(1).strip())
+            start = match.end()
+            end = item_matches[i + 1].start() if i + 1 < len(item_matches) else len(text)
+            body = text[start:end].strip()
+            if len(body) > 50:
+                sections.append((header, body))
+
+        # For large ITEM bodies (>30K chars, e.g. ITEM 18/19 with financial statements),
+        # also split by sub-headers matching financial statement patterns
+        _SUB_PATTERNS = [
+            ("Consolidated Income Statement", "income_statement"),
+            ("Consolidated Statements of Operations", "income_statement"),
+            ("Consolidated Balance Sheet", "balance_sheet"),
+            ("Consolidated Statements of Cash Flows", "cash_flow"),
+            ("Consolidated Statement of Comprehensive Income", "comprehensive_income"),
+            ("Notes to Consolidated Financial Statements", "notes_to_fs"),
+        ]
+        extra_sections: list[tuple[str, str]] = []
+        for header, body in sections:
+            if len(body) < 30000:
+                continue
+            for sub_kw, sub_key in _SUB_PATTERNS:
+                # Find the keyword in the body
+                idx = body.lower().find(sub_kw.lower())
+                if idx == -1:
+                    continue
+                # Extract from keyword position to next keyword or 15K chars
+                sub_start = idx
+                sub_end = len(body)
+                for other_kw, _ in _SUB_PATTERNS:
+                    if other_kw.lower() == sub_kw.lower():
+                        continue
+                    other_idx = body.lower().find(other_kw.lower(), sub_start + len(sub_kw))
+                    if other_idx != -1 and other_idx < sub_end:
+                        sub_end = other_idx
+                chunk = body[sub_start:sub_end].strip()
+                if len(chunk) > 100:
+                    extra_sections.append((sub_kw, chunk[:30000]))
+
+        sections.extend(extra_sections)
+        return sections
+
+    # 3. ALL-CAPS lines as section headers
     caps_pattern = re.compile(
         r"^([A-Z][A-Z\s\(\)\-\,\.\/]{15,})$", re.MULTILINE,
     )
@@ -473,7 +539,6 @@ def _split_by_headers(text: str) -> list[tuple[str, str]]:
             start = match.end()
             end = caps_matches[i + 1].start() if i + 1 < len(caps_matches) else len(text)
             body = text[start:end].strip()
-            # Only keep sections with meaningful body (>50 chars)
             if len(body) > 50:
                 sections.append((header, body))
         return sections
