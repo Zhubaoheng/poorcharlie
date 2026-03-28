@@ -189,9 +189,9 @@ def serialize_upstream_for_committee(ctx: Any) -> dict[str, Any]:
     return result
 
 
-def format_filing_json(data: dict[str, Any], max_chars: int = 30000) -> str:
-    """Format filing data as JSON string, truncated if needed."""
+def format_filing_json(data: dict[str, Any], max_chars: int = 0) -> str:
+    """Format filing data as JSON string. No truncation by default (200K context)."""
     text = json.dumps(data, ensure_ascii=False, indent=2, default=str)
-    if len(text) > max_chars:
+    if max_chars > 0 and len(text) > max_chars:
         text = text[:max_chars] + "\n... (截断)"
     return text

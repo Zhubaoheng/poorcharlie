@@ -47,7 +47,7 @@ class CriticAgent(BaseAgent):
             result["has_filing_data"] = filing_data.get("has_filing", False)
             result["filing_json"] = format_filing_json(filing_data)
             result["upstream_json"] = format_filing_json(
-                serialize_upstream_for_committee(ctx), max_chars=20000,
+                serialize_upstream_for_committee(ctx),
             )
         else:
             result["has_filing_data"] = False

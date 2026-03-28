@@ -23,104 +23,104 @@ _SECTION_DEFS_HK: list[tuple[str, list[str], int]] = [
         "Consolidated Statement of Profit or Loss",
         "Consolidated Income Statement",
         "Consolidated Statement of Comprehensive Income",
-    ], 15000),
+    ], 30000),
     ("balance_sheet", [
         "Consolidated Statement of Financial Position",
         "Consolidated Balance Sheet",
-    ], 15000),
+    ], 30000),
     ("cash_flow", [
         "Consolidated Statement of Cash Flows",
         "Consolidated Cash Flow Statement",
-    ], 15000),
+    ], 30000),
     ("changes_in_equity", [
         "Consolidated Statement of Changes in Equity",
-    ], 10000),
+    ], 20000),
     ("accounting_policies", [
         "Material Accounting Policy",
         "Significant Accounting Polic",
         "Summary of Material Accounting",
         "Basis of Preparation",
-    ], 12000),
+    ], 24000),
     ("segments", [
         "Segment Information",
         "Operating Segments",
         "Segment Reporting",
-    ], 10000),
+    ], 20000),
     ("borrowings", [
         "Borrowings",
         "Bank Loans",
         "Notes Payable",
         "Interest-bearing",
-    ], 8000),
+    ], 16000),
     ("risk_factors", [
         "Risk Factors",
         "Principal Risks",
         "Risk Management",
         "Financial Risk",
-    ], 8000),
+    ], 16000),
     ("related_party", [
         "Related Party",
         "Connected Transaction",
-    ], 8000),
+    ], 16000),
     ("concentration", [
         "Major Customers",
         "Concentration",
         "Five Largest",
-    ], 6000),
+    ], 12000),
     ("revenue_recognition", [
         "Revenue Recognition",
         "Revenue from Contracts",
-    ], 6000),
+    ], 12000),
 ]
 
 _SECTION_DEFS_A_SHARE: list[tuple[str, list[str], int]] = [
     ("income_statement", [
         "合并利润表",
         "利润表",
-    ], 15000),
+    ], 30000),
     ("balance_sheet", [
         "合并资产负债表",
         "资产负债表",
-    ], 15000),
+    ], 30000),
     ("cash_flow", [
         "合并现金流量表",
         "现金流量表",
-    ], 15000),
+    ], 30000),
     ("accounting_policies", [
         "重要会计政策",
         "主要会计政策",
         "会计政策和会计估计",
-    ], 12000),
+    ], 24000),
     ("segments", [
         "分部信息",
         "分部报告",
         "主营业务分行业",
         "主营业务分产品",
-    ], 10000),
+    ], 20000),
     ("borrowings", [
         "短期借款",
         "长期借款",
         "应付债券",
         "有息负债",
-    ], 8000),
+    ], 16000),
     ("risk_factors", [
         "风险因素",
         "重大风险",
         "风险提示",
-    ], 8000),
+    ], 16000),
     ("related_party", [
         "关联方交易",
         "关联方关系",
-    ], 8000),
+    ], 16000),
     ("concentration", [
         "前五名客户",
         "前五名供应商",
         "主要客户",
-    ], 6000),
+    ], 12000),
     ("special_items", [
         "非经常性损益",
         "非经常损益",
-    ], 6000),
+    ], 12000),
 ]
 
 _SECTION_DEFS_US_ADR: list[tuple[str, list[str], int]] = [
@@ -130,36 +130,36 @@ _SECTION_DEFS_US_ADR: list[tuple[str, list[str], int]] = [
         "Consolidated Income Statement",
         "CONSOLIDATED INCOME STATEMENT",
         "CONSOLI DATED INCOME",  # EDGAR OCR artifact
-    ], 15000),
+    ], 30000),
     ("balance_sheet", [
         "Consolidated Balance Sheet",
         "Consolidated Statements of Financial Position",
         "CONSOLIDATED BALANCE SHEET",
-    ], 15000),
+    ], 30000),
     ("cash_flow", [
         "Consolidated Statements of Cash Flows",
         "Consolidated Cash Flow Statement",
         "CONSOLIDATED STA TEMENTS OF CASH FLOWS",  # EDGAR OCR artifact
         "CONSOLIDATED STATEMENTS OF CASH FLOWS",
-    ], 15000),
+    ], 30000),
     ("accounting_policies", [
         "Significant Accounting Polic",
         "Summary of Significant Accounting",
         "Critical Accounting Polic",
         "SIGNIFICANT ACCOUNTING POLIC",
-    ], 12000),
+    ], 24000),
     ("segments", [
         "Segment Information",
         "Segment Reporting",
         "SEGMENT INFORMATION",
-    ], 10000),
+    ], 20000),
     ("risk_factors", [
         "Risk Factors",
         "Item 3",
-    ], 8000),
+    ], 16000),
     ("related_party", [
         "Related Party",
-    ], 8000),
+    ], 16000),
 ]
 
 _MARKET_DEFS: dict[str, list[tuple[str, list[str], int]]] = {
@@ -169,7 +169,7 @@ _MARKET_DEFS: dict[str, list[tuple[str, list[str], int]]] = {
 }
 
 # Maximum total characters across all extracted sections
-_MAX_TOTAL_CHARS = 120_000
+_MAX_TOTAL_CHARS = 200_000
 
 
 # ---------------------------------------------------------------------------

@@ -45,7 +45,7 @@ class CommitteeAgent(BaseAgent):
             )
             upstream = serialize_upstream_for_committee(ctx)
             result["has_filing_data"] = bool(upstream)
-            result["upstream_json"] = format_filing_json(upstream, max_chars=40000)
+            result["upstream_json"] = format_filing_json(upstream)
         else:
             result["has_filing_data"] = False
             result["upstream_json"] = ""
