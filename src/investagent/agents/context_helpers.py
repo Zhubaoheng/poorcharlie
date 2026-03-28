@@ -30,6 +30,14 @@ def serialize_filing_for_prompt(ctx: Any) -> dict[str, Any]:
 
     result: dict[str, Any] = {"has_filing": True}
 
+    # MD&A raw text (preserved verbatim from each year's filing)
+    try:
+        mda_by_year = ctx.get_data("mda_by_year")
+        if mda_by_year:
+            result["mda"] = mda_by_year
+    except (KeyError, AttributeError):
+        pass
+
     # Market snapshot (price, market_cap, PE, PB — needed by multiple agents)
     info = _safe_get(ctx, "info_capture")
     if info is not None and hasattr(info, "market_snapshot"):

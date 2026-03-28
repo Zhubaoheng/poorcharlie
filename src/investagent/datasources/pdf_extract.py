@@ -18,7 +18,18 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 # Each entry: (section_key, [keywords], char_limit)
+# MD&A is the most valuable qualitative section — give it the biggest budget.
 _SECTION_DEFS_HK: list[tuple[str, list[str], int]] = [
+    ("mda", [
+        "Management Discussion and Analysis",
+        "Management Discussion & Analysis",
+        "MANAGEMENT DISCUSSION",
+        "Business Review and Outlook",
+        "Business Review",
+        "Chairman's Statement",
+        "Financial Review",
+        "Operating and Financial Review",
+    ], 60000),
     ("income_statement", [
         "Consolidated Statement of Profit or Loss",
         "Consolidated Income Statement",
@@ -74,6 +85,15 @@ _SECTION_DEFS_HK: list[tuple[str, list[str], int]] = [
 ]
 
 _SECTION_DEFS_A_SHARE: list[tuple[str, list[str], int]] = [
+    ("mda", [
+        "经营情况讨论与分析",
+        "管理层讨论与分析",
+        "董事会报告",
+        "业务回顾",
+        "经营情况",
+        "财务回顾",
+        "主要业务分析",
+    ], 60000),
     ("income_statement", [
         "合并利润表",
         "利润表",
@@ -124,6 +144,15 @@ _SECTION_DEFS_A_SHARE: list[tuple[str, list[str], int]] = [
 ]
 
 _SECTION_DEFS_US_ADR: list[tuple[str, list[str], int]] = [
+    ("mda", [
+        "Operating and Financial Review",
+        "Management Discussion",
+        "Management's Discussion",
+        "Item 5",
+        "OPERATING AND FINANCIAL REVIEW",
+        "BUSINESS OVERVIEW",
+        "MANAGEMENT DISCUSSION",
+    ], 60000),
     ("income_statement", [
         "Consolidated Statements of Operations",
         "Consolidated Statements of Income",
@@ -261,6 +290,14 @@ def extract_sections(
     if not header_sections:
         return {}
 
+    # Stop keywords: when we hit these headers, MD&A range capture ends
+    _MDA_STOP_KEYWORDS = {
+        "CONSOLIDATED", "INDEPENDENT AUDITOR", "FINANCIAL STATEMENTS",
+        "CORPORATE GOVERNANCE", "DIRECTORS' REPORT", "ESG",
+        "SUSTAINABILITY", "合并利润", "合并资产", "合并现金",
+        "审计报告", "独立核数师", "公司治理",
+    }
+
     result: dict[str, str] = {}
     total_chars = 0
 
@@ -268,14 +305,35 @@ def extract_sections(
         if total_chars >= max_total_chars:
             break
 
-        # Find all matching header sections
         matched_parts: list[str] = []
-        for header, body in header_sections:
-            header_upper = header.upper()
-            for kw in keywords:
-                if kw.upper() in header_upper:
+
+        if section_key == "mda":
+            # MD&A range capture: grab from first match through all
+            # subsequent sub-headers until a major non-MD&A section
+            capturing = False
+            for header, body in header_sections:
+                header_upper = header.upper()
+
+                if not capturing:
+                    # Start capturing when we hit an MD&A keyword
+                    for kw in keywords:
+                        if kw.upper() in header_upper:
+                            capturing = True
+                            break
+
+                if capturing:
+                    # Stop if we hit a non-MD&A major section
+                    if any(stop in header_upper for stop in _MDA_STOP_KEYWORDS):
+                        break
                     matched_parts.append(f"### {header}\n\n{body}")
-                    break
+        else:
+            # Normal matching: find all headers containing any keyword
+            for header, body in header_sections:
+                header_upper = header.upper()
+                for kw in keywords:
+                    if kw.upper() in header_upper:
+                        matched_parts.append(f"### {header}\n\n{body}")
+                        break
 
         if not matched_parts:
             continue

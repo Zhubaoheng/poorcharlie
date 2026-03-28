@@ -596,19 +596,30 @@ class FilingAgent(BaseAgent):
     # Main entry point
     # ------------------------------------------------------------------
 
-    async def _process_one_filing(self, doc: FilingDocument) -> FilingOutput | None:
-        """Download, extract, validate, and optionally retry one filing."""
+    async def _process_one_filing(
+        self, doc: FilingDocument,
+    ) -> tuple[FilingOutput | None, str]:
+        """Download, extract, validate, and optionally retry one filing.
+
+        Returns (FilingOutput, mda_text) — mda_text is raw MD&A preserved
+        verbatim for downstream agents (not processed through LLM).
+        """
         logger.info("Processing %s %s", doc.filing_type, doc.fiscal_year)
 
         sections = await self._download_one(doc)
         if not sections:
             logger.warning("No sections extracted from %s %s", doc.filing_type, doc.fiscal_year)
-            return None
+            return None, ""
+
+        # Extract and preserve MD&A before sending rest to LLM
+        mda_text = sections.pop("mda", "")
+        if mda_text:
+            logger.info("MD&A extracted: %d chars from %s %s", len(mda_text), doc.filing_type, doc.fiscal_year)
 
         output = await self._extract_from_single_filing(sections, doc.fiscal_year)
         if output is None:
             logger.warning("LLM extraction failed for %s %s", doc.filing_type, doc.fiscal_year)
-            return None
+            return None, mda_text
 
         # Validation + retry
         problems = self._validate_extraction(output)
@@ -623,7 +634,7 @@ class FilingAgent(BaseAgent):
                 if len(retry_problems) < len(problems):
                     output = retry_output
 
-        return output
+        return output, mda_text
 
     async def run(
         self, input_data: BaseModel, ctx: Any = None,
@@ -682,9 +693,16 @@ class FilingAgent(BaseAgent):
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         partial_outputs: list[FilingOutput] = []
+        all_mda: dict[str, str] = {}  # fiscal_year → MD&A text
         for i, result in enumerate(results):
-            if isinstance(result, FilingOutput):
-                partial_outputs.append(result)
+            if isinstance(result, tuple):
+                output, mda_text = result
+                if isinstance(output, FilingOutput):
+                    partial_outputs.append(output)
+                if mda_text:
+                    fy = docs_to_process[i].fiscal_year
+                    ft = docs_to_process[i].filing_type
+                    all_mda[f"{ft} {fy}"] = mda_text
             elif isinstance(result, Exception):
                 logger.warning("Filing %s failed: %s", docs_to_process[i].fiscal_year, result)
 
@@ -703,6 +721,12 @@ class FilingAgent(BaseAgent):
         # Post-processing: compute derived fields from available data
         result = self._normalize_fiscal_keys(result)
         result = self._compute_derived_fields(result)
+
+        # Store raw MD&A text in context for downstream agents
+        if ctx is not None and all_mda:
+            ctx.set_data("mda_by_year", all_mda)
+            total_mda = sum(len(v) for v in all_mda.values())
+            logger.info("Stored %d MD&A sections (%d chars total)", len(all_mda), total_mda)
 
         # Inject market_currency from info_capture
         if ctx is not None:
