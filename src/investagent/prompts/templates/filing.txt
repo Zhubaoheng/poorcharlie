@@ -53,7 +53,11 @@
 - `gross_profit`：毛利 / Gross profit（= revenue - cost_of_revenue）
 - `rd_expense`：研发费用（如披露）
 - `sga_expense`：销售及管理费用 / Selling and administrative expenses
-- `depreciation_amortization`：折旧和摊销（如单独披露）
+- `depreciation_amortization`：折旧和摊销。**查找位置**（按优先级）：
+  1. 利润表中的 "Depreciation and amortization" / "折旧及摊销" 行
+  2. 现金流量表中 "经营活动调整项" 里的 "Depreciation" / "Amortization"
+  3. 附注中的固定资产/无形资产折旧摊销披露
+  如果在利润表中找不到，请务必检查现金流量表的调整项。
 - `operating_income`：营业利润 / Operating profit
 - `interest_expense`：利息费用 / Finance costs
 - `tax_provision`：所得税 / Income tax expense
@@ -64,7 +68,10 @@
 - `shares_basic`：基本股本数 / Weighted average shares（查找 EPS 计算附近或股本变动表）
 - `shares_diluted`：稀释股本数
 
-**注意**：如果利润表分"按性质"和"按功能"两种格式，优先提取"按功能"格式（含 cost_of_revenue）。
+**注意**：
+- 如果利润表分"按性质"（by nature）和"按功能"（by function）两种格式，优先"按功能"（含 cost_of_revenue）
+- **IFRS "按性质"格式**没有 cost_of_revenue 行（只有 Staff costs / Depreciation / Other expenses 等），此时 cost_of_revenue 填 null，但仍必须提取 operating_income
+- `sga_expense`：如果利润表没有单独的 SGA 行（IFRS 按性质格式常见），可从附注中查找 "selling and distribution expenses" + "administrative expenses" 合计
 
 ### 3. 资产负债表（balance_sheet）
 

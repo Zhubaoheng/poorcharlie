@@ -220,6 +220,35 @@ async def test_filing_meta_is_server_generated():
 # Unit scale fix
 # ---------------------------------------------------------------------------
 
+def test_normalize_fiscal_keys():
+    """Y2023→2023, FY2023→FY period, then re-dedup."""
+    from investagent.agents.filing import FilingAgent
+
+    ti = _filing_tool_input("2024")
+    # Add a duplicate row with Y-prefix fiscal_year
+    ti["income_statement"].append({
+        "fiscal_year": "Y2023", "fiscal_period": "FY",
+        "revenue": 2.6e9, "net_income": 7e8,
+    })
+    # Add a row with FY-suffixed period
+    ti["income_statement"].append({
+        "fiscal_year": "2023", "fiscal_period": "FY2023",
+        "revenue": 2.5e9,  # less complete than above
+    })
+    output = FilingOutput.model_validate({
+        "meta": {"agent_name": "f", "timestamp": "2025-01-01T00:00:00Z", "model_used": "m", "token_usage": 0},
+        **ti,
+    })
+
+    result = FilingAgent._normalize_fiscal_keys(output)
+
+    # Y2023 and 2023_FY2023 should merge into one "2023_FY" row
+    fy_2023 = [r for r in result.income_statement if r.fiscal_year == "2023"]
+    assert len(fy_2023) == 1, f"Expected 1 row for 2023, got {len(fy_2023)}"
+    # Should keep the more complete one (with net_income)
+    assert fy_2023[0].net_income == 7e8
+
+
 def test_fix_unit_scale():
     """Cross-year unit inconsistency: some years' revenue scaled wrong."""
     from investagent.agents.filing import _fix_unit_scale

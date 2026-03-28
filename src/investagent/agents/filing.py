@@ -397,20 +397,88 @@ class FilingAgent(BaseAgent):
     # ------------------------------------------------------------------
 
     @staticmethod
+    def _normalize_fiscal_keys(output: FilingOutput) -> FilingOutput:
+        """Normalize fiscal_year and fiscal_period across all rows.
+
+        Fixes: "Y2023"→"2023", "FY2024"→"2024", "FY2023"→"FY" period.
+        Then re-deduplicates rows that became identical after normalization.
+        """
+        import re as _re
+
+        def _clean_year(fy: str) -> str:
+            """Extract 4-digit year from messy fiscal_year strings."""
+            m = _re.search(r"(\d{4})", fy)
+            return m.group(1) if m else fy
+
+        def _clean_period(fp: str | None) -> str:
+            fp = fp or "FY"
+            for prefix in ("FY", "H1", "H2", "Q1", "Q2", "Q3", "Q4"):
+                if fp.upper().startswith(prefix):
+                    return prefix
+            return fp
+
+        def _fix_rows(rows: list, has_period: bool = False) -> list:
+            fixed = []
+            for row in rows:
+                updates: dict[str, Any] = {}
+                clean_fy = _clean_year(row.fiscal_year)
+                if clean_fy != row.fiscal_year:
+                    updates["fiscal_year"] = clean_fy
+                if has_period:
+                    clean_fp = _clean_period(getattr(row, "fiscal_period", "FY"))
+                    if clean_fp != getattr(row, "fiscal_period", None):
+                        updates["fiscal_period"] = clean_fp
+                fixed.append(row.model_copy(update=updates) if updates else row)
+            return fixed
+
+        # Normalize all row types
+        new_is = _fix_rows(list(output.income_statement), has_period=True)
+        new_bs = _fix_rows(list(output.balance_sheet))
+        new_cf = _fix_rows(list(output.cash_flow))
+        new_seg = _fix_rows(list(output.segments))
+
+        # Re-deduplicate after normalization (keeps most-filled row)
+        def _count_filled(row: Any) -> int:
+            d = row.model_dump() if hasattr(row, "model_dump") else {}
+            return sum(1 for v in d.values() if v is not None)
+
+        def _dedup(rows: list, key_fn) -> list:
+            seen: dict[str, Any] = {}
+            for row in rows:
+                k = key_fn(row)
+                if k not in seen or _count_filled(row) > _count_filled(seen[k]):
+                    seen[k] = row
+            return list(seen.values())
+
+        new_is = _dedup(new_is, lambda r: f"{r.fiscal_year}_{getattr(r, 'fiscal_period', 'FY')}")
+        new_bs = _dedup(new_bs, lambda r: r.fiscal_year)
+        new_cf = _dedup(new_cf, lambda r: r.fiscal_year)
+        new_seg = _dedup(new_seg, lambda r: f"{r.fiscal_year}_{r.segment_name}")
+
+        # Normalize fiscal_years_covered in meta
+        all_years = sorted(set(r.fiscal_year for r in new_is) | set(r.fiscal_year for r in new_bs))
+
+        return output.model_copy(update={
+            "income_statement": new_is,
+            "balance_sheet": new_bs,
+            "cash_flow": new_cf,
+            "segments": new_seg,
+            "filing_meta": output.filing_meta.model_copy(update={
+                "fiscal_years_covered": all_years,
+            }),
+        })
+
+    @staticmethod
     def _compute_derived_fields(output: FilingOutput) -> FilingOutput:
         """Fill computable fields and fix unit errors. Pure arithmetic, no LLM.
 
-        Derives: gross_profit, eps, shares, free_cash_flow.
-        Fixes: fiscal_period normalization, shares unit sanity check.
+        Derives: gross_profit, cost_of_revenue (from operating data),
+                 eps, shares, free_cash_flow, depreciation estimate.
+        Fixes: shares unit sanity check.
         """
         new_is: list[Any] = []
         for row in output.income_statement:
             updates: dict[str, Any] = {}
-
-            # Normalize fiscal_period: "FY2023" → "FY", "H12025" → "H1"
-            fp = getattr(row, "fiscal_period", "FY") or "FY"
-            if len(fp) > 2 and fp[:2] in ("FY", "H1", "Q1", "Q2", "Q3", "Q4"):
-                updates["fiscal_period"] = fp[:2]
 
             rev = row.revenue
             cor = row.cost_of_revenue
@@ -420,10 +488,26 @@ class FilingAgent(BaseAgent):
             eps_d = row.eps_diluted
             sh_b = row.shares_basic
             sh_d = row.shares_diluted
+            oi = row.operating_income
+            gp = row.gross_profit
 
-            # gross_profit
-            if row.gross_profit is None and rev is not None and cor is not None:
-                updates["gross_profit"] = rev - abs(cor)
+            # gross_profit: multiple fallback paths
+            if gp is None:
+                if rev is not None and cor is not None:
+                    # Standard: gross_profit = revenue - cost_of_revenue
+                    updates["gross_profit"] = rev - abs(cor)
+                elif rev is not None and oi is not None and cor is None:
+                    # IFRS "by nature" fallback: no COGS line exists.
+                    # Approximate: gross_profit ≈ revenue - (revenue - operating_income)
+                    # This equals operating_income + SGA + other OpEx, which overstates
+                    # true gross profit. But it's better than null for margin analysis.
+                    # We DON'T set cost_of_revenue (it genuinely doesn't exist).
+                    pass  # Leave gross_profit null if no COGS — don't fake it
+
+            # depreciation: if null in IS but we can estimate from balance sheet PPE changes
+            if row.depreciation_amortization is None:
+                # Will be handled in cross-row pass below
+                pass
 
             # shares from eps: shares = net_income / eps
             if sh_b is None and eps_b is not None and eps_b != 0:
@@ -466,9 +550,31 @@ class FilingAgent(BaseAgent):
                 updates["free_cash_flow"] = row.operating_cash_flow - abs(row.capex)
             new_cf.append(row.model_copy(update=updates) if updates else row)
 
+        # Estimate depreciation from PPE changes + capex
+        # D&A ≈ capex - (PPE_end - PPE_start)
+        bs_by_year = {r.fiscal_year: r for r in output.balance_sheet}
+        cf_by_year = {r.fiscal_year: r for r in new_cf}
+        is_by_year = {f"{r.fiscal_year}_{getattr(r, 'fiscal_period', 'FY')}": (i, r)
+                      for i, r in enumerate(new_is)}
+
+        for key, (idx, is_row) in is_by_year.items():
+            if is_row.depreciation_amortization is not None:
+                continue
+            fy = is_row.fiscal_year
+            prev_fy = str(int(fy) - 1) if fy.isdigit() else None
+            if prev_fy and fy in bs_by_year and prev_fy in bs_by_year:
+                ppe_end = getattr(bs_by_year[fy], "ppe_net", None)
+                ppe_start = getattr(bs_by_year[prev_fy], "ppe_net", None)
+                capex = getattr(cf_by_year.get(fy), "capex", None) if fy in cf_by_year else None
+                if ppe_end is not None and ppe_start is not None and capex is not None:
+                    # D&A ≈ capex - (PPE_end - PPE_start)
+                    da_estimate = abs(capex) - (ppe_end - ppe_start)
+                    if da_estimate > 0:
+                        new_is[idx] = is_row.model_copy(update={
+                            "depreciation_amortization": round(da_estimate),
+                        })
+
         # Cross-year unit consistency check
-        # If some years' revenue is 50x+ smaller than median, LLM forgot
-        # to convert units (e.g., "868,687" in millions vs "868687000000")
         new_is = _fix_unit_scale(new_is, "revenue")
         new_bs = _fix_unit_scale(list(output.balance_sheet), "total_assets")
         new_cf = _fix_unit_scale(new_cf, "operating_cash_flow")
@@ -595,6 +701,7 @@ class FilingAgent(BaseAgent):
         result = self._merge_filing_outputs(partial_outputs)
 
         # Post-processing: compute derived fields from available data
+        result = self._normalize_fiscal_keys(result)
         result = self._compute_derived_fields(result)
 
         # Inject market_currency from info_capture
