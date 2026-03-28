@@ -12,6 +12,17 @@
 - 无风险利率（{{ currency }}）：{{ risk_free_rate_pct }}
 - **门槛收益率 = 2× 无风险利率 = {{ hurdle_rate_pct }}**
 
+{% if market_snapshot %}
+## 当前市场数据
+
+- 股价：{{ market_snapshot.currency }} {{ market_snapshot.price }}
+- 市值：{{ market_snapshot.market_cap }}
+- 企业价值：{{ market_snapshot.enterprise_value }}
+- PE（滚动）：{{ market_snapshot.pe_ratio }}
+- PB：{{ market_snapshot.pb_ratio }}
+- 股息率：{{ market_snapshot.dividend_yield }}
+{% endif %}
+
 {% if has_filing_data %}
 ## 财务数据（来自 Filing 结构化）
 

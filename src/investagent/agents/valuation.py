@@ -60,12 +60,27 @@ class ValuationAgent(BaseAgent):
         }
         if ctx is not None:
             from investagent.agents.context_helpers import (
+                _safe_get,
                 format_filing_json,
                 serialize_filing_for_prompt,
             )
             filing_data = serialize_filing_for_prompt(ctx)
             result["has_filing_data"] = filing_data.get("has_filing", False)
             result["filing_json"] = format_filing_json(filing_data)
+
+            # Inject market snapshot (price, market_cap, PE, PB)
+            info = _safe_get(ctx, "info_capture")
+            if info is not None and hasattr(info, "market_snapshot"):
+                ms = info.market_snapshot
+                result["market_snapshot"] = {
+                    "price": ms.price,
+                    "market_cap": ms.market_cap,
+                    "enterprise_value": ms.enterprise_value,
+                    "pe_ratio": ms.pe_ratio,
+                    "pb_ratio": ms.pb_ratio,
+                    "dividend_yield": ms.dividend_yield,
+                    "currency": ms.currency,
+                }
         else:
             result["has_filing_data"] = False
             result["filing_json"] = ""

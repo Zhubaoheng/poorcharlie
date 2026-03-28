@@ -37,7 +37,7 @@ class LLMClient:
         system: str,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
-        max_tokens: int = 8192,
+        max_tokens: int = 16384,
     ) -> anthropic.types.Message:
         """Send a single tool-use request to an Anthropic-compatible API."""
         kwargs: dict[str, Any] = {

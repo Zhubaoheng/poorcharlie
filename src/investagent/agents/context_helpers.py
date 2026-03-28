@@ -30,6 +30,20 @@ def serialize_filing_for_prompt(ctx: Any) -> dict[str, Any]:
 
     result: dict[str, Any] = {"has_filing": True}
 
+    # Market snapshot (price, market_cap, PE, PB — needed by multiple agents)
+    info = _safe_get(ctx, "info_capture")
+    if info is not None and hasattr(info, "market_snapshot"):
+        ms = info.market_snapshot
+        result["market_snapshot"] = {
+            "price": ms.price,
+            "market_cap": ms.market_cap,
+            "enterprise_value": ms.enterprise_value,
+            "pe_ratio": ms.pe_ratio,
+            "pb_ratio": ms.pb_ratio,
+            "dividend_yield": ms.dividend_yield,
+            "currency": ms.currency,
+        }
+
     # Meta
     m = filing.filing_meta
     result["filing_meta"] = {
