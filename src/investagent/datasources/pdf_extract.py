@@ -82,6 +82,58 @@ _SECTION_DEFS_HK: list[tuple[str, list[str], int]] = [
         "Revenue Recognition",
         "Revenue from Contracts",
     ], 12000),
+    ("remuneration", [
+        "Remuneration Committee",
+        "Directors' Remuneration",
+        "Remuneration of Senior Management",
+        "Employee and Remuneration",
+        "Share Schemes",
+        "Share Option Scheme",
+        "Share Award Scheme",
+    ], 30000),
+    ("directors_interests", [
+        "Directors' and Chief Executive's Interests",
+        "Directors' Interests in Shares",
+        "Substantial Shareholders",
+        "Interest in Shares",
+        "Key management compensation",
+        "Benefits and interests of directors",
+    ], 16000),
+    ("corporate_structure", [
+        "Weighted Voting Rights",
+        "Contractual Arrangements",
+        "VIE Structure",
+    ], 20000),
+    ("non_ifrs", [
+        "Non-IFRS",
+        "Adjusted Net Profit",
+        "Adjusted EBITDA",
+    ], 8000),
+    ("audit", [
+        "Key Audit Matters",
+        "Independent Auditor",
+        "Auditor's Remuneration",
+    ], 8000),
+    ("liquidity", [
+        "Liquidity and Financial Resources",
+        "Capital Expenditures",
+        "Investments Held",
+        "Gearing",
+    ], 8000),
+    ("governance_risks", [
+        "Geopolitical risk",
+        "AI technology risk",
+        "Competition risk",
+        "Compliance risk",
+        "Material Litigation",
+        "Contingencies",
+        "Events after the Reporting Period",
+    ], 12000),
+    ("supply_chain", [
+        "Supply Chain Management",
+        "Responsible Minerals",
+        "Supplier",
+    ], 10000),
 ]
 
 _SECTION_DEFS_A_SHARE: list[tuple[str, list[str], int]] = [
@@ -141,6 +193,43 @@ _SECTION_DEFS_A_SHARE: list[tuple[str, list[str], int]] = [
         "非经常性损益",
         "非经常损益",
     ], 12000),
+    ("remuneration", [
+        "董事及高级管理人员薪酬",
+        "薪酬委员会",
+        "管理层薪酬",
+        "股权激励",
+        "限制性股票",
+        "员工薪酬",
+    ], 20000),
+    ("directors_interests", [
+        "董事及监事持股",
+        "主要股东",
+        "持股变动",
+        "控股股东",
+        "实际控制人",
+    ], 12000),
+    ("non_gaap", [
+        "非国际财务报告准则",
+        "经调整",
+        "扣非",
+    ], 8000),
+    ("audit", [
+        "关键审计事项",
+        "审计报告",
+        "核数师",
+    ], 8000),
+    ("liquidity", [
+        "流动资金",
+        "资本支出",
+        "融资活动",
+        "资产负债率",
+    ], 8000),
+    ("governance_risks", [
+        "重大诉讼",
+        "或有事项",
+        "报告期后事项",
+        "期后事项",
+    ], 8000),
 ]
 
 _SECTION_DEFS_US_ADR: list[tuple[str, list[str], int]] = [
@@ -189,6 +278,35 @@ _SECTION_DEFS_US_ADR: list[tuple[str, list[str], int]] = [
     ("related_party", [
         "Related Party",
     ], 16000),
+    ("remuneration", [
+        "Executive Compensation",
+        "Director Compensation",
+        "Compensation Discussion",
+        "Share Incentive",
+        "Stock Option",
+        "Item 6",
+    ], 20000),
+    ("directors_interests", [
+        "Principal Shareholders",
+        "Major Shareholders",
+        "Security Ownership",
+        "Item 7",
+    ], 12000),
+    ("corporate_structure", [
+        "VIE Structure",
+        "Variable Interest Entit",
+        "Contractual Arrangements",
+    ], 20000),
+    ("audit", [
+        "Key Audit Matters",
+        "Report of Independent",
+        "Auditor",
+    ], 8000),
+    ("governance_risks", [
+        "Legal Proceedings",
+        "Contingencies",
+        "Item 8",
+    ], 8000),
 ]
 
 _MARKET_DEFS: dict[str, list[tuple[str, list[str], int]]] = {

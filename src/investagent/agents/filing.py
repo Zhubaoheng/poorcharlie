@@ -598,28 +598,36 @@ class FilingAgent(BaseAgent):
 
     async def _process_one_filing(
         self, doc: FilingDocument,
-    ) -> tuple[FilingOutput | None, str]:
+    ) -> tuple[FilingOutput | None, dict[str, str]]:
         """Download, extract, validate, and optionally retry one filing.
 
-        Returns (FilingOutput, mda_text) — mda_text is raw MD&A preserved
-        verbatim for downstream agents (not processed through LLM).
+        Returns (FilingOutput, raw_sections) — raw_sections preserved verbatim
+        for downstream agents (MD&A, remuneration, audit, etc. NOT processed
+        through LLM structuring).
         """
         logger.info("Processing %s %s", doc.filing_type, doc.fiscal_year)
 
         sections = await self._download_one(doc)
         if not sections:
             logger.warning("No sections extracted from %s %s", doc.filing_type, doc.fiscal_year)
-            return None, ""
+            return None, {}
 
-        # Extract and preserve MD&A before sending rest to LLM
-        mda_text = sections.pop("mda", "")
-        if mda_text:
-            logger.info("MD&A extracted: %d chars from %s %s", len(mda_text), doc.filing_type, doc.fiscal_year)
+        # Separate: sections that go to LLM for structuring vs raw preservation
+        _LLM_SECTIONS = {
+            "income_statement", "balance_sheet", "cash_flow", "changes_in_equity",
+            "accounting_policies", "segments", "borrowings", "risk_factors",
+            "related_party", "concentration", "revenue_recognition", "special_items",
+        }
+        llm_sections = {k: v for k, v in sections.items() if k in _LLM_SECTIONS}
+        raw_sections = {k: v for k, v in sections.items() if k not in _LLM_SECTIONS}
 
-        output = await self._extract_from_single_filing(sections, doc.fiscal_year)
+        # Also keep a copy of LLM sections in raw for possible downstream use
+        raw_sections.update(sections)
+
+        output = await self._extract_from_single_filing(llm_sections, doc.fiscal_year)
         if output is None:
             logger.warning("LLM extraction failed for %s %s", doc.filing_type, doc.fiscal_year)
-            return None, mda_text
+            return None, raw_sections
 
         # Validation + retry
         problems = self._validate_extraction(output)
@@ -628,13 +636,13 @@ class FilingAgent(BaseAgent):
                 "%s %s: %d critical nulls, retrying",
                 doc.filing_type, doc.fiscal_year, len(problems),
             )
-            retry_output = await self._retry_with_hints(sections, doc.fiscal_year, problems)
+            retry_output = await self._retry_with_hints(llm_sections, doc.fiscal_year, problems)
             if retry_output is not None:
                 retry_problems = self._validate_extraction(retry_output)
                 if len(retry_problems) < len(problems):
                     output = retry_output
 
-        return output, mda_text
+        return output, raw_sections
 
     async def run(
         self, input_data: BaseModel, ctx: Any = None,
@@ -693,16 +701,20 @@ class FilingAgent(BaseAgent):
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         partial_outputs: list[FilingOutput] = []
-        all_mda: dict[str, str] = {}  # fiscal_year → MD&A text
+        all_mda: dict[str, str] = {}
+        all_raw_sections: dict[str, dict[str, str]] = {}  # year_key → {section_key → text}
         for i, result in enumerate(results):
             if isinstance(result, tuple):
-                output, mda_text = result
+                output, raw_sections = result
                 if isinstance(output, FilingOutput):
                     partial_outputs.append(output)
-                if mda_text:
-                    fy = docs_to_process[i].fiscal_year
-                    ft = docs_to_process[i].filing_type
-                    all_mda[f"{ft} {fy}"] = mda_text
+                fy = docs_to_process[i].fiscal_year
+                ft = docs_to_process[i].filing_type
+                year_key = f"{ft} {fy}"
+                if raw_sections:
+                    all_raw_sections[year_key] = raw_sections
+                    if "mda" in raw_sections:
+                        all_mda[year_key] = raw_sections["mda"]
             elif isinstance(result, Exception):
                 logger.warning("Filing %s failed: %s", docs_to_process[i].fiscal_year, result)
 
@@ -722,11 +734,14 @@ class FilingAgent(BaseAgent):
         result = self._normalize_fiscal_keys(result)
         result = self._compute_derived_fields(result)
 
-        # Store raw MD&A text in context for downstream agents
-        if ctx is not None and all_mda:
-            ctx.set_data("mda_by_year", all_mda)
-            total_mda = sum(len(v) for v in all_mda.values())
-            logger.info("Stored %d MD&A sections (%d chars total)", len(all_mda), total_mda)
+        # Store raw sections in context for downstream agents
+        if ctx is not None:
+            if all_mda:
+                ctx.set_data("mda_by_year", all_mda)
+            if all_raw_sections:
+                ctx.set_data("raw_sections_by_year", all_raw_sections)
+            total = sum(sum(len(v) for v in secs.values()) for secs in all_raw_sections.values())
+            logger.info("Stored raw sections: %d filings, %d chars total", len(all_raw_sections), total)
 
         # Inject market_currency from info_capture
         if ctx is not None:

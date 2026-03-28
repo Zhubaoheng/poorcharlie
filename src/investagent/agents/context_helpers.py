@@ -65,10 +65,20 @@ def format_json(data: Any) -> str:
 # ---------------------------------------------------------------------------
 
 def data_for_accounting_risk(ctx: Any) -> dict[str, Any]:
-    """Accounting policies + footnotes + special items + MD&A."""
+    """Accounting policies + footnotes + special items + audit + MD&A."""
     filing = _get_filing(ctx)
     if not filing:
         return {"has_filing": False}
+    # Collect audit sections from raw extractions
+    raw_sections = _safe_data(ctx, "raw_sections_by_year") or {}
+    audit_text = ""
+    non_ifrs_text = ""
+    for year_key, sections in raw_sections.items():
+        if "audit" in sections:
+            audit_text += f"\n\n[{year_key}]\n{sections['audit']}"
+        for k in ("non_ifrs", "non_gaap"):
+            if k in sections:
+                non_ifrs_text += f"\n\n[{year_key}]\n{sections[k]}"
     return {
         "has_filing": True,
         "filing_meta": {"accounting_standard": filing.filing_meta.accounting_standard,
@@ -78,6 +88,8 @@ def data_for_accounting_risk(ctx: Any) -> dict[str, Any]:
         "footnote_extracts": [f.model_dump() for f in filing.footnote_extracts],
         "special_items": [s.model_dump() for s in filing.special_items],
         "income_statement": _compact_rows(filing.income_statement),
+        "audit": audit_text.strip() if audit_text else None,
+        "non_ifrs_adjustments": non_ifrs_text.strip() if non_ifrs_text else None,
         "mda": _get_mda(ctx),
     }
 
@@ -173,10 +185,20 @@ def data_for_compounding(ctx: Any) -> dict[str, Any]:
 
 
 def data_for_psychology(ctx: Any) -> dict[str, Any]:
-    """MD&A + income trends + buyback/dividend (management behavior signals)."""
+    """MD&A + management compensation + insider interests + buyback signals."""
     filing = _get_filing(ctx)
     if not filing:
         return {"has_filing": False}
+    mda = _get_mda(ctx)
+    # Extract remuneration and directors' interests from raw sections
+    raw_sections = _safe_data(ctx, "raw_sections_by_year") or {}
+    remuneration_text = ""
+    directors_interests_text = ""
+    for year_key, sections in raw_sections.items():
+        if "remuneration" in sections:
+            remuneration_text += f"\n\n[{year_key}]\n{sections['remuneration']}"
+        if "directors_interests" in sections:
+            directors_interests_text += f"\n\n[{year_key}]\n{sections['directors_interests']}"
     return {
         "has_filing": True,
         "income_statement": _compact_rows(filing.income_statement),
@@ -184,7 +206,9 @@ def data_for_psychology(ctx: Any) -> dict[str, Any]:
         "buyback_history": [b.model_dump() for b in filing.buyback_history],
         "acquisition_history": [a.model_dump() for a in filing.acquisition_history],
         "special_items": [s.model_dump() for s in filing.special_items],
-        "mda": _get_mda(ctx),
+        "mda": mda,
+        "remuneration": remuneration_text.strip() if remuneration_text else None,
+        "directors_interests": directors_interests_text.strip() if directors_interests_text else None,
         "market_snapshot": _get_market_snapshot(ctx),
     }
 
