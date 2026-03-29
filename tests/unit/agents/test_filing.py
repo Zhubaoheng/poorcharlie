@@ -23,7 +23,8 @@ from investagent.workflow.context import PipelineContext
 # ---------------------------------------------------------------------------
 
 def _intake() -> CompanyIntake:
-    return CompanyIntake(ticker="1448", name="福寿园", exchange="HKEX")
+    # Use a fake exchange to prevent AkShare from being called in tests
+    return CompanyIntake(ticker="TEST", name="测试公司", exchange="TEST")
 
 
 def _mock_llm() -> LLMClient:

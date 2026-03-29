@@ -156,11 +156,104 @@ def fetch_a_share_financials(symbol: str, years: int = 7) -> dict[str, Any]:
     return result
 
 
-def fetch_hk_financials(symbol: str, years: int = 7) -> dict[str, Any]:
-    """Fetch HK stock financial indicators from AkShare (东财 source).
+def _pivot_hk_long_format(df: Any, years: int) -> dict[str, dict[str, float | None]]:
+    """Pivot AkShare HK long-format data to {report_date: {item_name: amount}}.
 
-    Note: Full three-statement data may not be available for HK stocks via AkShare.
-    Falls back to key indicators (EPS, ROE, margins) from analysis API.
+    AkShare returns HK data as long format: one row per (report_date, item).
+    We pivot to one dict per report_date for easy mapping.
+    """
+    result: dict[str, dict[str, float | None]] = {}
+    for _, row in df.iterrows():
+        report_date = str(row.get("REPORT_DATE", ""))[:10]
+        fiscal_year = report_date[:4]
+        item_name = str(row.get("STD_ITEM_NAME", ""))
+        amount = row.get("AMOUNT")
+
+        if fiscal_year not in result:
+            result[fiscal_year] = {}
+        if amount is not None and amount == amount:  # NaN check
+            result[fiscal_year][item_name] = float(amount)
+
+    # Keep only latest N years
+    sorted_years = sorted(result.keys(), reverse=True)[:years]
+    return {y: result[y] for y in sorted_years}
+
+
+# HK item name → our schema field mapping
+_HK_IS_MAP: dict[str, str] = {
+    "营业额": "revenue",
+    "营运收入": "revenue",
+    "销售成本": "cost_of_revenue",
+    "毛利": "gross_profit",
+    "研发费用": "rd_expense",
+    "销售及分销费用": "sga_expense",
+    "销售费用": "sga_expense",
+    "折旧及摊销": "depreciation_amortization",
+    "经营溢利": "operating_income",
+    "营运利润": "operating_income",
+    "融资成本": "interest_expense",
+    "税项": "tax_provision",
+    "所得税": "tax_provision",
+    "除税后溢利": "net_income",
+    "净利润": "net_income",
+    "持续经营业务税后利润": "net_income",
+    "股东应占溢利": "net_income_to_parent",
+    "公司拥有人应占利润": "net_income_to_parent",
+    "每股基本盈利": "eps_basic",
+    "基本每股收益": "eps_basic",
+    "每股摊薄盈利": "eps_diluted",
+    "稀释每股收益": "eps_diluted",
+}
+
+_HK_BS_MAP: dict[str, str] = {
+    "物业厂房及设备": "ppe_net",
+    "物业、厂房及设备": "ppe_net",
+    "商誉": "goodwill",
+    "无形资产": "intangible_assets",
+    "存货": "inventory",
+    "应收帐款": "accounts_receivable",
+    "应收账款": "accounts_receivable",
+    "现金及等价物": "cash_and_equivalents",
+    "银行结余及现金": "cash_and_equivalents",
+    "流动资产合计": "total_current_assets",
+    "非流动资产合计": "total_current_assets",  # fallback
+    "总资产": "total_assets",
+    "资产总值": "total_assets",
+    "资产总额": "total_assets",
+    "应付帐款": "accounts_payable",
+    "应付账款": "accounts_payable",
+    "短期借款": "short_term_debt",
+    "短期贷款": "short_term_debt",
+    "流动负债合计": "total_current_liabilities",
+    "长期贷款": "long_term_debt",
+    "非流动负债合计": "long_term_debt",
+    "总负债": "total_liabilities",
+    "负债总值": "total_liabilities",
+    "负债总额": "total_liabilities",
+    "股东权益": "shareholders_equity",
+    "权益总额": "shareholders_equity",
+    "净资产": "shareholders_equity",
+    "少数股东权益": "minority_interest",
+}
+
+_HK_CF_MAP: dict[str, str] = {
+    "经营业务现金净额": "operating_cash_flow",
+    "经营活动产生的现金流量净额": "operating_cash_flow",
+    "购买物业、厂房及设备": "capex",
+    "购建固定资产": "capex",
+    "已付股利": "dividends_paid",
+    "已付股息": "dividends_paid",
+    "回购股份": "buyback_amount",
+    "偿还借贷": "debt_repaid",
+    "新增借贷": "debt_issued",
+    "融资业务现金净额": "debt_issued",  # approximate
+}
+
+
+def fetch_hk_financials(symbol: str, years: int = 7) -> dict[str, Any]:
+    """Fetch HK stock full three statements from AkShare (东财 source).
+
+    Uses stock_financial_hk_report_em with long-format pivot.
     """
     import akshare as ak
 
@@ -169,40 +262,70 @@ def fetch_hk_financials(symbol: str, years: int = 7) -> dict[str, Any]:
         "income_statement": [],
         "balance_sheet": [],
         "cash_flow": [],
-        "indicators": [],
         "source": "akshare_hk_em",
     }
 
+    # --- Income Statement ---
     try:
-        df = ak.stock_financial_hk_analysis_indicator_em(symbol=code)
-        df = df.head(years)
+        df = ak.stock_financial_hk_report_em(stock=code, symbol="利润表", indicator="年度")
+        pivoted = _pivot_hk_long_format(df, years)
 
-        for _, row in df.iterrows():
-            report_date = str(row.get("REPORT_DATE", ""))[:10]
-            fiscal_year = report_date[:4]
+        for fiscal_year, items in sorted(pivoted.items()):
+            row: dict[str, Any] = {"fiscal_year": fiscal_year, "fiscal_period": "FY"}
+            for cn_name, field in _HK_IS_MAP.items():
+                if cn_name in items and field not in row:
+                    val = items[cn_name]
+                    # cost fields are positive in source, negate for consistency
+                    if field in ("cost_of_revenue", "interest_expense", "tax_provision", "sga_expense", "rd_expense"):
+                        val = -abs(val) if val > 0 else val
+                    row[field] = val
+            row.setdefault("shares_basic", None)
+            row.setdefault("shares_diluted", None)
+            result["income_statement"].append(row)
 
-            result["indicators"].append({
-                "fiscal_year": fiscal_year,
-                "eps_basic": row.get("BASIC_EPS"),
-                "eps_diluted": row.get("DILUTED_EPS"),
-                "eps_ttm": row.get("EPS_TTM"),
-                "operate_income": row.get("OPERATE_INCOME"),
-                "gross_profit": row.get("GROSS_PROFIT"),
-                "holder_profit": row.get("HOLDER_PROFIT"),
-                "gross_profit_ratio": row.get("GROSS_PROFIT_RATIO"),
-                "net_profit_ratio": row.get("NET_PROFIT_RATIO"),
-                "roe_avg": row.get("ROE_AVG"),
-                "roa": row.get("ROA"),
-                "bps": row.get("BPS"),
-                "debt_asset_ratio": row.get("DEBT_ASSET_RATIO"),
-                "current_ratio": row.get("CURRENT_RATIO"),
-                "ocf_sales": row.get("OCF_SALES"),
-                "roic_yearly": row.get("ROIC_YEARLY"),
-            })
-
-        logger.info("AkShare HK indicators: %d rows for %s", len(result["indicators"]), code)
+        logger.info("AkShare HK IS: %d rows for %s", len(result["income_statement"]), code)
     except Exception:
-        logger.warning("AkShare HK indicators failed for %s", code, exc_info=True)
+        logger.warning("AkShare HK IS failed for %s", code, exc_info=True)
+
+    # --- Balance Sheet ---
+    try:
+        df = ak.stock_financial_hk_report_em(stock=code, symbol="资产负债表", indicator="年度")
+        pivoted = _pivot_hk_long_format(df, years)
+
+        for fiscal_year, items in sorted(pivoted.items()):
+            row = {"fiscal_year": fiscal_year}
+            for cn_name, field in _HK_BS_MAP.items():
+                if cn_name in items and field not in row:
+                    row[field] = items[cn_name]
+            result["balance_sheet"].append(row)
+
+        logger.info("AkShare HK BS: %d rows for %s", len(result["balance_sheet"]), code)
+    except Exception:
+        logger.warning("AkShare HK BS failed for %s", code, exc_info=True)
+
+    # --- Cash Flow ---
+    try:
+        df = ak.stock_financial_hk_report_em(stock=code, symbol="现金流量表", indicator="年度")
+        pivoted = _pivot_hk_long_format(df, years)
+
+        for fiscal_year, items in sorted(pivoted.items()):
+            row: dict[str, Any] = {"fiscal_year": fiscal_year}
+            for cn_name, field in _HK_CF_MAP.items():
+                if cn_name in items and field not in row:
+                    val = items[cn_name]
+                    if field == "capex":
+                        val = abs(val)
+                    row[field] = val
+            # Derive FCF
+            ocf = row.get("operating_cash_flow")
+            capex = row.get("capex")
+            if ocf is not None and capex is not None:
+                row["free_cash_flow"] = ocf - abs(capex)
+            result["cash_flow"].append(row)
+
+        logger.info("AkShare HK CF: %d rows for %s", len(result["cash_flow"]), code)
+    except Exception:
+        logger.warning("AkShare HK CF failed for %s", code, exc_info=True)
 
     return result
 
