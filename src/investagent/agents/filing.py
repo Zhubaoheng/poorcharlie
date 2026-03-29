@@ -395,6 +395,70 @@ class FilingAgent(BaseAgent):
         )
 
     # ------------------------------------------------------------------
+    # AkShare structured data override
+    # ------------------------------------------------------------------
+
+    async def _override_with_structured_data(
+        self, output: FilingOutput, intake: CompanyIntake,
+    ) -> FilingOutput:
+        """Override LLM-extracted numbers with AkShare API data (zero hallucination).
+
+        AkShare provides deterministic financial statement data for A-shares
+        and HK stocks. When available, these values replace LLM extraction.
+        """
+        from investagent.datasources.akshare_source import fetch_structured_financials
+        from investagent.schemas.filing import (
+            BalanceSheetRow,
+            CashFlowRow,
+            IncomeStatementRow,
+        )
+
+        try:
+            data = await fetch_structured_financials(intake.ticker, self._market)
+        except Exception:
+            logger.warning("AkShare fetch failed, keeping LLM data", exc_info=True)
+            return output
+
+        if not data or not any(data.get(k) for k in ("income_statement", "balance_sheet", "cash_flow")):
+            return output
+
+        logger.info(
+            "AkShare override: IS=%d BS=%d CF=%d rows",
+            len(data.get("income_statement", [])),
+            len(data.get("balance_sheet", [])),
+            len(data.get("cash_flow", [])),
+        )
+
+        ak_is = [IncomeStatementRow(**row) for row in data.get("income_statement", [])]
+        ak_bs = [BalanceSheetRow(**row) for row in data.get("balance_sheet", [])]
+        ak_cf = [CashFlowRow(**row) for row in data.get("cash_flow", [])]
+
+        # AkShare overrides LLM for same fiscal_year
+        def _merge_rows(ak_rows: list, llm_rows: list, key_fn) -> list:
+            by_key: dict = {}
+            for row in llm_rows:
+                by_key[key_fn(row)] = row
+            for row in ak_rows:
+                by_key[key_fn(row)] = row  # override
+            return list(by_key.values())
+
+        new_is = _merge_rows(ak_is, list(output.income_statement),
+                             lambda r: f"{r.fiscal_year}_{getattr(r, 'fiscal_period', 'FY')}")
+        new_bs = _merge_rows(ak_bs, list(output.balance_sheet), lambda r: r.fiscal_year)
+        new_cf = _merge_rows(ak_cf, list(output.cash_flow), lambda r: r.fiscal_year)
+
+        all_years = sorted(set(r.fiscal_year for r in new_is) | set(r.fiscal_year for r in new_bs))
+
+        return output.model_copy(update={
+            "income_statement": new_is,
+            "balance_sheet": new_bs,
+            "cash_flow": new_cf,
+            "filing_meta": output.filing_meta.model_copy(update={
+                "fiscal_years_covered": all_years,
+            }),
+        })
+
+    # ------------------------------------------------------------------
     # Post-processing: compute derived fields
     # ------------------------------------------------------------------
 
@@ -731,6 +795,9 @@ class FilingAgent(BaseAgent):
 
         # Merge — newest first (already sorted)
         result = self._merge_filing_outputs(partial_outputs)
+
+        # Override with AkShare structured data (zero hallucination)
+        result = await self._override_with_structured_data(result, input_data)
 
         # Post-processing: compute derived fields from available data
         result = self._normalize_fiscal_keys(result)
