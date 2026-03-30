@@ -96,8 +96,8 @@
 - **安全边际** = (base 内在价值 - 当前股价) / base 内在价值
 - **价格判断**（必须严格按以下规则输出 `price_vs_value`，门槛收益率是硬性前提）：
   - EXPENSIVE：`meets_hurdle_rate` 为 false（不论安全边际多大，预期回报不达标即为贵）
-  - CHEAP：`meets_hurdle_rate` 为 true **且** 安全边际 > 20%（达标且价格显著低于价值）
-  - FAIR：`meets_hurdle_rate` 为 true **且** 安全边际 ≤ 20%（达标但安全边际不够充分）
+  - CHEAP：`meets_hurdle_rate` 为 true **且** 存在显著安全边际（通常 20% 以上，但应结合企业质量判断——伟大企业 15% 即可视为 CHEAP，平庸企业可能需要 30% 以上）
+  - FAIR：`meets_hurdle_rate` 为 true **但** 安全边际有限（价格接近内在价值，未明显低估也未高估）
 
 芒格原则：伟大企业在 FAIR 价格即可考虑，普通企业必须 CHEAP。
 

@@ -9,6 +9,7 @@ from investagent.schemas.financial_quality import (
     FinancialQualityOutput,
     FinancialQualityScores,
 )
+from investagent.schemas.mental_models import MoatOutput
 from investagent.schemas.triage import (
     ExplainabilityScore,
     TriageDecision,
@@ -212,3 +213,33 @@ class TestFinancialQualityGate:
         proceed, reason = check_financial_quality_gate(ctx)
         assert proceed is False
         assert "POOR" in reason
+
+    def test_poor_with_wide_moat_continues(self):
+        """POOR financials + WIDE moat = qualitative override, pipeline continues."""
+        ctx = _make_ctx()
+        ctx.set_result(
+            "financial_quality",
+            FinancialQualityOutput(
+                meta=_meta("financial_quality"),
+                pass_minimum_standard=False,
+                enterprise_quality="POOR",
+                scores=self._quality_scores(),
+                key_strengths=[],
+                key_failures=["Negative FCF", "Low ROIC"],
+                should_continue="No",
+            ),
+        )
+        ctx.set_result(
+            "moat",
+            MoatOutput(
+                meta=_meta("moat"),
+                moat_rating="WIDE",
+                industry_structure="Oligopoly with high barriers",
+                moat_type=["brand", "switching_cost"],
+                pricing_power_position="Strong",
+                moat_trend="Stable",
+            ),
+        )
+        proceed, reason = check_financial_quality_gate(ctx)
+        assert proceed is True
+        assert reason == ""

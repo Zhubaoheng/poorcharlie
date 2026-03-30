@@ -81,8 +81,8 @@
 
 ## 最低标准判定
 
-- **通过（pass_minimum_standard = true）**：六项平均分 ≥ 5 且无单项 ≤ 2
-- **未通过（pass_minimum_standard = false）**：六项平均分 < 5 或存在单项 ≤ 2
+- **通过（pass_minimum_standard = true）**：六项平均分 ≥ 5 且无单项 ≤ 2。但这是一般性指引而非机械规则——如果某维度因战略投入而偏低（如现金转换因高 Capex 为 2 分），但其他维度强劲，应综合判断而非自动判定不通过。
+- **未通过（pass_minimum_standard = false）**：六项平均分 < 5 或多个维度存在严重问题，且无合理的战略解释。
 
 **重要**：pass_minimum_standard 是基于当前财务数据的客观评估。但 enterprise_quality 应综合考虑企业的竞争地位、管理层能力、战略方向和长期前景。一家处于战略投资期的企业可能 pass_minimum_standard = false，但 enterprise_quality 仍为 AVERAGE 甚至 GREAT。
 

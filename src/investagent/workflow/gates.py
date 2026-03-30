@@ -25,14 +25,43 @@ def check_accounting_risk_gate(ctx: PipelineContext) -> tuple[bool, str]:
 
 
 def check_financial_quality_gate(ctx: PipelineContext) -> tuple[bool, str]:
-    """Only POOR enterprises stop the pipeline.
+    """Only POOR enterprises stop — unless strong qualitative signals override.
 
-    AVERAGE and GREAT enterprises always continue to Critic/Committee,
-    even if pass_minimum_standard is False — the mental model agents
-    may have found strong moat/compounding/management signals that
-    deserve full evaluation.
+    Mental model agents run in parallel with financial_quality. If moat is WIDE
+    or compounding is STRONG, the company may be in a strategic investment phase
+    where poor current financials don't represent the true quality of the business.
     """
     result: FinancialQualityOutput = ctx.get_result("financial_quality")  # type: ignore[assignment]
-    if result.enterprise_quality == "POOR":
-        return False, f"Enterprise quality POOR: {', '.join(result.key_failures)}"
-    return True, ""
+    if result.enterprise_quality != "POOR":
+        return True, ""
+
+    # POOR financials — check if qualitative signals override
+    qualitative_override = False
+    override_reasons: list[str] = []
+
+    try:
+        moat = ctx.get_result("moat")
+        if getattr(moat, "moat_rating", "") == "WIDE":
+            qualitative_override = True
+            override_reasons.append("moat_rating=WIDE")
+    except (KeyError, AttributeError):
+        pass
+
+    try:
+        compounding = ctx.get_result("compounding")
+        if getattr(compounding, "compounding_quality", "") == "STRONG":
+            qualitative_override = True
+            override_reasons.append("compounding_quality=STRONG")
+    except (KeyError, AttributeError):
+        pass
+
+    if qualitative_override:
+        import logging
+
+        logging.getLogger(__name__).info(
+            "Financial quality POOR but qualitative override: %s — continuing pipeline",
+            ", ".join(override_reasons),
+        )
+        return True, ""
+
+    return False, f"Enterprise quality POOR: {', '.join(result.key_failures)}"
