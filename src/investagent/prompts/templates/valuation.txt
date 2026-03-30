@@ -110,7 +110,7 @@
 - `friction_adjusted_return`：三种情境的摩擦调整后回报率（百分比）
 - `meets_hurdle_rate`：Base 情境是否达到 {{ hurdle_rate_pct }} 门槛
 - `intrinsic_value_per_share`：每股内在价值区间（bear/base/bull，注明 currency）
-- `margin_of_safety_pct`：安全边际百分比（正数=低估，负数=高估）
+- `margin_of_safety_pct`：安全边际，以百分点数值填写（例如 33.2 表示 33.2%，-9.0 表示高估 9%。不要用小数如 0.332）
 - `price_vs_value`："CHEAP" / "FAIR" / "EXPENSIVE"
 - `key_assumptions`：核心估值假设列表（正常化盈利依据、ROIC 可持续性、再投资空间等）
 - `sensitivity_drivers`：敏感性驱动因素列表（哪些变量变化会显著影响估值结论）

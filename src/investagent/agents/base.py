@@ -66,6 +66,33 @@ def _coerce_lists_to_strings(obj: Any, schema: dict[str, Any]) -> Any:
     return obj
 
 
+def _coerce_strings_to_lists(obj: Any, schema: dict[str, Any]) -> Any:
+    """Coerce string values to lists when the schema expects an array.
+
+    Some LLM providers (MiniMax) return JSON arrays as strings, and
+    _repair_json_strings may fail if the string contains literal
+    newlines or other characters that break json.loads.
+    """
+    if not isinstance(obj, dict) or not schema:
+        return obj
+    props = schema.get("properties", {})
+    for key, value in obj.items():
+        prop_schema = props.get(key, {})
+        prop_type = prop_schema.get("type")
+        if isinstance(value, str) and prop_type == "array":
+            stripped = value.strip()
+            if stripped.startswith("["):
+                # Replace literal newlines/tabs that break JSON parsing
+                cleaned = stripped.replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
+                try:
+                    parsed = json.loads(cleaned)
+                    if isinstance(parsed, list):
+                        obj[key] = parsed
+                except (json.JSONDecodeError, ValueError):
+                    pass
+    return obj
+
+
 class BaseAgent(ABC):
     """Base for all pipeline agents.
 
@@ -198,9 +225,9 @@ class BaseAgent(ABC):
 
             # Repair LLM output quirks
             tool_input = _repair_json_strings(tool_input)
-            tool_input = _coerce_lists_to_strings(
-                tool_input, self._output_type().model_json_schema(),
-            )
+            output_schema = self._output_type().model_json_schema()
+            tool_input = _coerce_lists_to_strings(tool_input, output_schema)
+            tool_input = _coerce_strings_to_lists(tool_input, output_schema)
 
             # Inject server-managed meta (overwrites anything the LLM emitted)
             meta = self._build_meta(self.name, response)
