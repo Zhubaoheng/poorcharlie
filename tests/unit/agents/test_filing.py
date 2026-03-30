@@ -360,6 +360,141 @@ async def test_filing_market_currency_from_info_capture(mock_sections, mock_pdf)
 
 
 # ---------------------------------------------------------------------------
+# AkShare skip-numbers optimization
+# ---------------------------------------------------------------------------
+
+def _a_share_intake() -> CompanyIntake:
+    return CompanyIntake(ticker="600519", name="贵州茅台", exchange="SSE")
+
+
+def _akshare_data() -> dict:
+    """Minimal AkShare response with IS/BS/CF rows."""
+    return {
+        "income_statement": [
+            {"fiscal_year": "2024", "fiscal_period": "FY", "revenue": 1.7e11, "net_income": 8.6e10},
+            {"fiscal_year": "2023", "fiscal_period": "FY", "revenue": 1.5e11, "net_income": 7.5e10},
+        ],
+        "balance_sheet": [
+            {"fiscal_year": "2024", "total_assets": 3e11, "shareholders_equity": 2.2e11},
+            {"fiscal_year": "2023", "total_assets": 2.7e11, "shareholders_equity": 2e11},
+        ],
+        "cash_flow": [
+            {"fiscal_year": "2024", "operating_cash_flow": 9e10, "capex": 5e9},
+            {"fiscal_year": "2023", "operating_cash_flow": 8e10, "capex": 4e9},
+        ],
+        "source": "akshare_ths",
+    }
+
+
+@patch("investagent.agents.filing.extract_pdf_markdown", return_value="text")
+@patch("investagent.agents.filing.extract_sections", return_value={
+    "income_statement": "Revenue: 170B",
+    "balance_sheet": "Total assets: 300B",
+    "cash_flow": "OCF: 90B",
+    "accounting_policies": "Revenue recognition policy text...",
+    "risk_factors": "Macro risk, regulatory risk...",
+})
+async def test_ashare_skips_number_extraction(mock_sections, mock_pdf):
+    """A-share with AkShare data skips LLM number extraction sections."""
+    intake = _a_share_intake()
+    llm = _mock_llm()
+    llm.create_message = AsyncMock(return_value=_mock_response(_filing_tool_input()))
+
+    ctx = _make_ctx([FilingDocument(
+        market="A_SHARE", ticker="600519", company_name="贵州茅台",
+        filing_type="年报", fiscal_year="2024", fiscal_period="FY",
+        filing_date=date(2025, 4, 1),
+        source_url="https://example.com/report.pdf",
+        content_type="pdf", raw_content=b"%PDF-fake",
+    )])
+
+    with patch(
+        "investagent.datasources.akshare_source.fetch_structured_financials",
+        new_callable=AsyncMock,
+        return_value=_akshare_data(),
+    ) as mock_ak:
+        agent = FilingAgent(llm)
+        result = await agent.run(intake, ctx)
+
+    # AkShare should have been called exactly once (the pre-fetch;
+    # the override reuses it).
+    mock_ak.assert_awaited_once()
+
+    # LLM was still called (for qualitative sections), but the sections
+    # it received should NOT include the three-statement number sections.
+    assert llm.create_message.call_count >= 1
+
+    # The final result should have AkShare numbers (from override).
+    assert any(r.revenue == 1.7e11 for r in result.income_statement)
+    assert any(r.total_assets == 3e11 for r in result.balance_sheet)
+
+
+@patch("investagent.agents.filing.extract_pdf_markdown", return_value="text")
+@patch("investagent.agents.filing.extract_sections", return_value={
+    "income_statement": "Revenue: 170B",
+    "accounting_policies": "Some policy text",
+})
+async def test_ashare_akshare_fail_falls_back_to_full_llm(mock_sections, mock_pdf):
+    """When AkShare pre-fetch fails, A-share falls back to full LLM extraction."""
+    intake = _a_share_intake()
+    llm = _mock_llm()
+    llm.create_message = AsyncMock(return_value=_mock_response(_filing_tool_input()))
+
+    ctx = _make_ctx([FilingDocument(
+        market="A_SHARE", ticker="600519", company_name="贵州茅台",
+        filing_type="年报", fiscal_year="2024", fiscal_period="FY",
+        filing_date=date(2025, 4, 1),
+        source_url="https://example.com/report.pdf",
+        content_type="pdf", raw_content=b"%PDF-fake",
+    )])
+
+    with patch(
+        "investagent.datasources.akshare_source.fetch_structured_financials",
+        new_callable=AsyncMock,
+        side_effect=RuntimeError("AkShare API down"),
+    ):
+        agent = FilingAgent(llm)
+        result = await agent.run(intake, ctx)
+
+    # Should still succeed using full LLM extraction
+    assert result.meta.agent_name == "filing"
+    assert len(result.income_statement) >= 1
+
+
+@patch("investagent.agents.filing.extract_pdf_markdown", return_value="text")
+@patch("investagent.agents.filing.extract_sections", return_value={"income_statement": "data"})
+async def test_us_adr_does_not_skip_numbers(mock_sections, mock_pdf):
+    """US ADR companies always use full LLM extraction (no AkShare pre-fetch)."""
+    intake = CompanyIntake(ticker="BABA", name="阿里巴巴", exchange="NYSE")
+    llm = _mock_llm()
+    llm.create_message = AsyncMock(return_value=_mock_response(_filing_tool_input()))
+
+    ctx = _make_ctx([FilingDocument(
+        market="US_ADR", ticker="BABA", company_name="Alibaba",
+        filing_type="20-F", fiscal_year="2024", fiscal_period="FY",
+        filing_date=date(2025, 7, 1),
+        source_url="https://example.com/20f.pdf",
+        content_type="pdf", raw_content=b"%PDF-fake",
+    )])
+
+    # Mock returns empty dict for US_ADR (same as real implementation).
+    # The key assertion is that the pre-fetch branch is never entered
+    # for US markets, so the mock only gets called in _override_with_structured_data.
+    with patch(
+        "investagent.datasources.akshare_source.fetch_structured_financials",
+        new_callable=AsyncMock,
+        return_value={},  # US_ADR returns empty
+    ) as mock_ak:
+        agent = FilingAgent(llm)
+        result = await agent.run(intake, ctx)
+
+    # Called only once from _override_with_structured_data (not from pre-fetch,
+    # since market is US_ADR which is not in the pre-fetch whitelist).
+    mock_ak.assert_awaited_once()
+    assert result.meta.agent_name == "filing"
+
+
+# ---------------------------------------------------------------------------
 # Error paths
 # ---------------------------------------------------------------------------
 

@@ -42,6 +42,13 @@ _TARGET_ANNUAL_REPORTS = 5  # 5 years of annual reports
 _MAX_INTERIM = 1  # plus latest interim for most recent data
 _UNIT_SCALE_THRESHOLD = 50  # if a value is 50x smaller than median, likely unit error
 
+# Sections containing financial numbers that AkShare can replace.
+# When AkShare structured data is available, these are excluded from the
+# LLM prompt to avoid wasting tokens on number extraction.
+_NUMBER_SECTIONS = frozenset({
+    "income_statement", "balance_sheet", "cash_flow", "changes_in_equity",
+})
+
 
 def _fix_unit_scale(rows: list[Any], field: str) -> list[Any]:
     """Fix cross-year unit inconsistencies.
@@ -214,6 +221,21 @@ class FilingAgent(BaseAgent):
                 continue
 
             tool_input = _repair_json_strings(tool_input)
+            # Extra repair: list-typed fields that are still strings after JSON repair
+            for list_field in ("dividend_per_share_history", "buyback_history",
+                               "acquisition_history", "debt_schedule", "covenant_status",
+                               "special_items", "footnote_extracts", "risk_factors",
+                               "accounting_policies", "income_statement", "balance_sheet",
+                               "cash_flow", "segments"):
+                val = tool_input.get(list_field)
+                if isinstance(val, str):
+                    try:
+                        import json as _json
+                        parsed = _json.loads(val)
+                        if isinstance(parsed, list):
+                            tool_input[list_field] = parsed
+                    except (ValueError, TypeError):
+                        tool_input[list_field] = []  # fallback: empty list
             tool_input = _coerce_lists_to_strings(
                 tool_input, FilingOutput.model_json_schema(),
             )
@@ -377,8 +399,8 @@ class FilingAgent(BaseAgent):
             }),
             # Quantitative: dedup by year (newer report preferred)
             income_statement=_dedup_rows(all_is, lambda r: f"{r.fiscal_year}_{getattr(r, 'fiscal_period', 'FY')}"),
-            balance_sheet=_dedup_rows(all_bs, lambda r: r.fiscal_year),
-            cash_flow=_dedup_rows(all_cf, lambda r: r.fiscal_year),
+            balance_sheet=_dedup_rows(all_bs, lambda r: f"{r.fiscal_year}_{getattr(r, 'fiscal_period', 'FY')}"),
+            cash_flow=_dedup_rows(all_cf, lambda r: f"{r.fiscal_year}_{getattr(r, 'fiscal_period', 'FY')}"),
             segments=_dedup_rows(all_seg, lambda r: f"{r.fiscal_year}_{r.segment_name}"),
             buyback_history=_dedup_rows(all_buy, lambda r: r.fiscal_year),
             acquisition_history=_dedup_rows(all_acq, lambda r: f"{r.fiscal_year}_{getattr(r, 'target', '')}"),
@@ -399,12 +421,20 @@ class FilingAgent(BaseAgent):
     # ------------------------------------------------------------------
 
     async def _override_with_structured_data(
-        self, output: FilingOutput, intake: CompanyIntake,
+        self,
+        output: FilingOutput,
+        intake: CompanyIntake,
+        *,
+        prefetched: dict[str, Any] | None = None,
     ) -> FilingOutput:
         """Override LLM-extracted numbers with AkShare API data (zero hallucination).
 
         AkShare provides deterministic financial statement data for A-shares
         and HK stocks. When available, these values replace LLM extraction.
+
+        Args:
+            prefetched: Pre-fetched AkShare data from the run() method.
+                If provided, skip the redundant API call.
         """
         from investagent.datasources.akshare_source import fetch_structured_financials
         from investagent.schemas.filing import (
@@ -413,11 +443,14 @@ class FilingAgent(BaseAgent):
             IncomeStatementRow,
         )
 
-        try:
-            data = await fetch_structured_financials(intake.ticker, self._market)
-        except Exception:
-            logger.warning("AkShare fetch failed, keeping LLM data", exc_info=True)
-            return output
+        if prefetched is not None:
+            data = prefetched
+        else:
+            try:
+                data = await fetch_structured_financials(intake.ticker, self._market)
+            except Exception:
+                logger.warning("AkShare fetch failed, keeping LLM data", exc_info=True)
+                return output
 
         if not data or not any(data.get(k) for k in ("income_statement", "balance_sheet", "cash_flow")):
             return output
@@ -433,19 +466,30 @@ class FilingAgent(BaseAgent):
         ak_bs = [BalanceSheetRow(**row) for row in data.get("balance_sheet", [])]
         ak_cf = [CashFlowRow(**row) for row in data.get("cash_flow", [])]
 
-        # AkShare overrides LLM for same fiscal_year
+        # AkShare overrides LLM for same fiscal_year (field-by-field merge)
         def _merge_rows(ak_rows: list, llm_rows: list, key_fn) -> list:
             by_key: dict = {}
             for row in llm_rows:
                 by_key[key_fn(row)] = row
-            for row in ak_rows:
-                by_key[key_fn(row)] = row  # override
+            for ak_row in ak_rows:
+                k = key_fn(ak_row)
+                if k in by_key:
+                    # Merge: AkShare non-null fields override LLM, keep LLM for nulls
+                    llm_row = by_key[k]
+                    updates: dict[str, Any] = {}
+                    for field_name in type(ak_row).model_fields:
+                        ak_val = getattr(ak_row, field_name, None)
+                        if ak_val is not None:
+                            updates[field_name] = ak_val
+                    by_key[k] = llm_row.model_copy(update=updates)
+                else:
+                    by_key[k] = ak_row
             return list(by_key.values())
 
-        new_is = _merge_rows(ak_is, list(output.income_statement),
-                             lambda r: f"{r.fiscal_year}_{getattr(r, 'fiscal_period', 'FY')}")
-        new_bs = _merge_rows(ak_bs, list(output.balance_sheet), lambda r: r.fiscal_year)
-        new_cf = _merge_rows(ak_cf, list(output.cash_flow), lambda r: r.fiscal_year)
+        _fy_fp = lambda r: f"{r.fiscal_year}_{getattr(r, 'fiscal_period', 'FY')}"
+        new_is = _merge_rows(ak_is, list(output.income_statement), _fy_fp)
+        new_bs = _merge_rows(ak_bs, list(output.balance_sheet), _fy_fp)
+        new_cf = _merge_rows(ak_cf, list(output.cash_flow), _fy_fp)
 
         all_years = sorted(set(r.fiscal_year for r in new_is) | set(r.fiscal_year for r in new_bs))
 
@@ -499,8 +543,8 @@ class FilingAgent(BaseAgent):
 
         # Normalize all row types
         new_is = _fix_rows(list(output.income_statement), has_period=True)
-        new_bs = _fix_rows(list(output.balance_sheet))
-        new_cf = _fix_rows(list(output.cash_flow))
+        new_bs = _fix_rows(list(output.balance_sheet), has_period=True)
+        new_cf = _fix_rows(list(output.cash_flow), has_period=True)
         new_seg = _fix_rows(list(output.segments))
 
         # Re-deduplicate after normalization (keeps most-filled row)
@@ -516,9 +560,10 @@ class FilingAgent(BaseAgent):
                     seen[k] = row
             return list(seen.values())
 
-        new_is = _dedup(new_is, lambda r: f"{r.fiscal_year}_{getattr(r, 'fiscal_period', 'FY')}")
-        new_bs = _dedup(new_bs, lambda r: r.fiscal_year)
-        new_cf = _dedup(new_cf, lambda r: r.fiscal_year)
+        _fy_fp_key = lambda r: f"{r.fiscal_year}_{getattr(r, 'fiscal_period', 'FY')}"
+        new_is = _dedup(new_is, _fy_fp_key)
+        new_bs = _dedup(new_bs, _fy_fp_key)
+        new_cf = _dedup(new_cf, _fy_fp_key)
         new_seg = _dedup(new_seg, lambda r: f"{r.fiscal_year}_{r.segment_name}")
 
         # Normalize fiscal_years_covered in meta
@@ -618,8 +663,11 @@ class FilingAgent(BaseAgent):
 
         # Estimate depreciation from PPE changes + capex
         # D&A ≈ capex - (PPE_end - PPE_start)
-        bs_by_year = {r.fiscal_year: r for r in output.balance_sheet}
-        cf_by_year = {r.fiscal_year: r for r in new_cf}
+        # Only use FY rows for cross-statement derivation
+        bs_by_year = {r.fiscal_year: r for r in output.balance_sheet
+                      if getattr(r, 'fiscal_period', 'FY') == 'FY'}
+        cf_by_year = {r.fiscal_year: r for r in new_cf
+                      if getattr(r, 'fiscal_period', 'FY') == 'FY'}
         is_by_year = {f"{r.fiscal_year}_{getattr(r, 'fiscal_period', 'FY')}": (i, r)
                       for i, r in enumerate(new_is)}
 
@@ -640,10 +688,16 @@ class FilingAgent(BaseAgent):
                             "depreciation_amortization": round(da_estimate),
                         })
 
-        # Cross-year unit consistency check
-        new_is = _fix_unit_scale(new_is, "revenue")
-        new_bs = _fix_unit_scale(list(output.balance_sheet), "total_assets")
-        new_cf = _fix_unit_scale(new_cf, "operating_cash_flow")
+        # Cross-year unit consistency check (FY rows only to avoid H1 vs FY mismatch)
+        fy_is = [r for r in new_is if getattr(r, 'fiscal_period', 'FY') == 'FY']
+        non_fy_is = [r for r in new_is if getattr(r, 'fiscal_period', 'FY') != 'FY']
+        fy_bs = [r for r in output.balance_sheet if getattr(r, 'fiscal_period', 'FY') == 'FY']
+        non_fy_bs = [r for r in output.balance_sheet if getattr(r, 'fiscal_period', 'FY') != 'FY']
+        fy_cf = [r for r in new_cf if getattr(r, 'fiscal_period', 'FY') == 'FY']
+        non_fy_cf = [r for r in new_cf if getattr(r, 'fiscal_period', 'FY') != 'FY']
+        new_is = _fix_unit_scale(fy_is, "revenue") + non_fy_is
+        new_bs = _fix_unit_scale(fy_bs, "total_assets") + non_fy_bs
+        new_cf = _fix_unit_scale(fy_cf, "operating_cash_flow") + non_fy_cf
 
         changed = (
             new_is != list(output.income_statement)
@@ -663,9 +717,19 @@ class FilingAgent(BaseAgent):
     # ------------------------------------------------------------------
 
     async def _process_one_filing(
-        self, doc: FilingDocument,
+        self,
+        doc: FilingDocument,
+        *,
+        skip_numbers: bool = False,
     ) -> tuple[FilingOutput | None, dict[str, str]]:
         """Download, extract, validate, and optionally retry one filing.
+
+        Args:
+            doc: Filing document to process.
+            skip_numbers: If True, exclude three-statement number sections
+                from the LLM prompt. Used when AkShare structured data is
+                available to avoid wasting tokens on number extraction that
+                will be overridden anyway.
 
         Returns (FilingOutput, raw_sections) — raw_sections preserved verbatim
         for downstream agents (MD&A, remuneration, audit, etc. NOT processed
@@ -690,23 +754,35 @@ class FilingAgent(BaseAgent):
         # Also keep a copy of LLM sections in raw for possible downstream use
         raw_sections.update(sections)
 
+        if skip_numbers:
+            # Remove three-statement sections — AkShare provides these numbers.
+            # Keep qualitative sections (accounting_policies, segments, etc.)
+            removed = [k for k in llm_sections if k in _NUMBER_SECTIONS]
+            llm_sections = {k: v for k, v in llm_sections.items() if k not in _NUMBER_SECTIONS}
+            logger.info(
+                "AkShare mode: skipped LLM number extraction for %s %s "
+                "(removed sections: %s)",
+                doc.filing_type, doc.fiscal_year, ", ".join(removed) or "none",
+            )
+
         output = await self._extract_from_single_filing(llm_sections, doc.fiscal_year)
         if output is None:
             logger.warning("LLM extraction failed for %s %s", doc.filing_type, doc.fiscal_year)
             return None, raw_sections
 
-        # Validation + retry
-        problems = self._validate_extraction(output)
-        if problems:
-            logger.info(
-                "%s %s: %d critical nulls, retrying",
-                doc.filing_type, doc.fiscal_year, len(problems),
-            )
-            retry_output = await self._retry_with_hints(llm_sections, doc.fiscal_year, problems)
-            if retry_output is not None:
-                retry_problems = self._validate_extraction(retry_output)
-                if len(retry_problems) < len(problems):
-                    output = retry_output
+        # Validation + retry (skip when numbers come from AkShare)
+        if not skip_numbers:
+            problems = self._validate_extraction(output)
+            if problems:
+                logger.info(
+                    "%s %s: %d critical nulls, retrying",
+                    doc.filing_type, doc.fiscal_year, len(problems),
+                )
+                retry_output = await self._retry_with_hints(llm_sections, doc.fiscal_year, problems)
+                if retry_output is not None:
+                    retry_problems = self._validate_extraction(retry_output)
+                    if len(retry_problems) < len(problems):
+                        output = retry_output
 
         return output, raw_sections
 
@@ -761,9 +837,49 @@ class FilingAgent(BaseAgent):
             len(docs_to_process), len(annuals), len(interims),
         )
 
-        # Process ALL filings in parallel — each gets its own full LLM call
+        # Pre-fetch AkShare structured data for markets that support it.
+        # If successful, we can skip expensive LLM number extraction and
+        # only use LLM for qualitative sections (accounting policies, etc.).
+        akshare_data: dict[str, Any] | None = None
+        skip_numbers = False
+        if self._market in ("A_SHARE", "HK"):
+            try:
+                from investagent.datasources.akshare_source import fetch_structured_financials
+                akshare_data = await fetch_structured_financials(
+                    input_data.ticker, self._market,
+                )
+                if akshare_data and any(
+                    akshare_data.get(k) for k in ("income_statement", "balance_sheet", "cash_flow")
+                ):
+                    skip_numbers = True
+                    logger.info(
+                        "AkShare pre-fetch OK for %s (%s): IS=%d BS=%d CF=%d rows — "
+                        "skipping LLM number extraction",
+                        input_data.ticker, self._market,
+                        len(akshare_data.get("income_statement", [])),
+                        len(akshare_data.get("balance_sheet", [])),
+                        len(akshare_data.get("cash_flow", [])),
+                    )
+                else:
+                    logger.info(
+                        "AkShare returned empty data for %s — falling back to full LLM extraction",
+                        input_data.ticker,
+                    )
+            except Exception:
+                logger.warning(
+                    "AkShare pre-fetch failed for %s — falling back to full LLM extraction",
+                    input_data.ticker,
+                    exc_info=True,
+                )
+
+        # Process ALL filings in parallel — each gets its own LLM call.
+        # When skip_numbers=True, the LLM call only extracts qualitative
+        # sections (much cheaper).
         import asyncio
-        tasks = [self._process_one_filing(doc) for doc in docs_to_process]
+        tasks = [
+            self._process_one_filing(doc, skip_numbers=skip_numbers)
+            for doc in docs_to_process
+        ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         partial_outputs: list[FilingOutput] = []
@@ -796,8 +912,11 @@ class FilingAgent(BaseAgent):
         # Merge — newest first (already sorted)
         result = self._merge_filing_outputs(partial_outputs)
 
-        # Override with AkShare structured data (zero hallucination)
-        result = await self._override_with_structured_data(result, input_data)
+        # Override with AkShare structured data (zero hallucination).
+        # Reuse pre-fetched data when available to avoid a redundant API call.
+        result = await self._override_with_structured_data(
+            result, input_data, prefetched=akshare_data,
+        )
 
         # Post-processing: compute derived fields from available data
         result = self._normalize_fiscal_keys(result)

@@ -36,6 +36,7 @@
 
 使用提供的工具输出以下字段：
 
+- `compounding_quality`：**复利质量综合评级**，必须从以下四个值中选一个：`STRONG`（高ROIC+充足再投资空间+可持续性好）/ `MODERATE`（部分具备复利条件，但有制约因素）/ `WEAK`（复利引擎动力不足，增长质量低）/ `NEGATIVE`（资本回报递减，价值在被消耗）
 - `compounding_engine`：复利引擎描述（公司靠什么实现复利增长，引擎是否可持续）
 - `incremental_return_on_capital`：增量资本回报分析（新增投资的回报率趋势）
 - `sustainability_period`：可持续期评估（高回报还能维持多久，受什么因素制约）

@@ -176,13 +176,33 @@ class TestFinancialQualityGate:
         proceed, _ = check_financial_quality_gate(ctx)
         assert proceed is True
 
-    def test_fail_stops(self):
+    def test_average_continues_even_if_fail(self):
+        """AVERAGE enterprises pass the gate even with pass_minimum_standard=False."""
         ctx = _make_ctx()
         ctx.set_result(
             "financial_quality",
             FinancialQualityOutput(
                 meta=_meta("financial_quality"),
                 pass_minimum_standard=False,
+                enterprise_quality="AVERAGE",
+                scores=self._quality_scores(),
+                key_strengths=["Strong revenue growth"],
+                key_failures=["Negative FCF from capex"],
+                should_continue="Continue — investment phase",
+            ),
+        )
+        proceed, _ = check_financial_quality_gate(ctx)
+        assert proceed is True
+
+    def test_poor_stops(self):
+        """Only POOR enterprises are stopped by the financial quality gate."""
+        ctx = _make_ctx()
+        ctx.set_result(
+            "financial_quality",
+            FinancialQualityOutput(
+                meta=_meta("financial_quality"),
+                pass_minimum_standard=False,
+                enterprise_quality="POOR",
                 scores=self._quality_scores(),
                 key_strengths=[],
                 key_failures=["Declining EPS", "High leverage"],
@@ -191,4 +211,4 @@ class TestFinancialQualityGate:
         )
         proceed, reason = check_financial_quality_gate(ctx)
         assert proceed is False
-        assert "Declining EPS" in reason
+        assert "POOR" in reason

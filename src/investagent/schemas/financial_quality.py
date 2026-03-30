@@ -19,6 +19,7 @@ class FinancialQualityScores(BaseModel, frozen=True):
 class FinancialQualityOutput(BaseAgentOutput):
     pass_minimum_standard: bool
     scores: FinancialQualityScores
+    enterprise_quality: str = ""  # "GREAT" | "AVERAGE" | "POOR" — Munger quality tier
     key_strengths: list[str]
     key_failures: list[str]
     should_continue: str

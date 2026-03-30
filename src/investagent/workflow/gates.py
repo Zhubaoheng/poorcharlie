@@ -25,8 +25,14 @@ def check_accounting_risk_gate(ctx: PipelineContext) -> tuple[bool, str]:
 
 
 def check_financial_quality_gate(ctx: PipelineContext) -> tuple[bool, str]:
-    """pass_minimum_standard=False -> stop pipeline."""
+    """Only POOR enterprises stop the pipeline.
+
+    AVERAGE and GREAT enterprises always continue to Critic/Committee,
+    even if pass_minimum_standard is False — the mental model agents
+    may have found strong moat/compounding/management signals that
+    deserve full evaluation.
+    """
     result: FinancialQualityOutput = ctx.get_result("financial_quality")  # type: ignore[assignment]
-    if not result.pass_minimum_standard:
-        return False, f"Financial quality below minimum: {', '.join(result.key_failures)}"
+    if result.enterprise_quality == "POOR":
+        return False, f"Enterprise quality POOR: {', '.join(result.key_failures)}"
     return True, ""

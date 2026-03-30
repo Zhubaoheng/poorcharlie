@@ -47,9 +47,16 @@ def _get_market_snapshot(ctx: Any) -> dict[str, Any] | None:
     }
 
 
-def _compact_rows(rows: list) -> list[dict]:
-    """Strip None values from row dicts to save tokens."""
-    return [{k: v for k, v in r.model_dump().items() if v is not None} for r in rows]
+def _compact_rows(rows: list, fy_only: bool = False) -> list[dict]:
+    """Strip None values from row dicts to save tokens.
+
+    If fy_only=True, filter to only FY (full-year) rows — avoids
+    confusing downstream agents with H1/Q2 partial-year data.
+    """
+    filtered = rows
+    if fy_only:
+        filtered = [r for r in rows if getattr(r, 'fiscal_period', 'FY') == 'FY']
+    return [{k: v for k, v in r.model_dump().items() if v is not None} for r in filtered]
 
 
 def _get_mda(ctx: Any, max_full_years: int = 2, max_chars_per_old: int = 8000) -> dict[str, str]:
@@ -110,7 +117,7 @@ def data_for_accounting_risk(ctx: Any) -> dict[str, Any]:
         "accounting_policies": [p.model_dump() for p in filing.accounting_policies],
         "footnote_extracts": [f.model_dump() for f in filing.footnote_extracts],
         "special_items": [s.model_dump() for s in filing.special_items],
-        "income_statement": _compact_rows(filing.income_statement),
+        "income_statement": _compact_rows(filing.income_statement, fy_only=True),
         "audit": audit_text.strip() if audit_text else None,
         "non_ifrs_adjustments": non_ifrs_text.strip() if non_ifrs_text else None,
         "notes_tax": _get_notes(ctx, ["notes_tax"]),
@@ -130,9 +137,9 @@ def data_for_financial_quality(ctx: Any) -> dict[str, Any]:
         "filing_meta": {"currency": filing.filing_meta.currency,
                         "market_currency": filing.filing_meta.market_currency,
                         "years_covered": filing.filing_meta.fiscal_years_covered},
-        "income_statement": _compact_rows(filing.income_statement),
-        "balance_sheet": _compact_rows(filing.balance_sheet),
-        "cash_flow": _compact_rows(filing.cash_flow),
+        "income_statement": _compact_rows(filing.income_statement, fy_only=True),
+        "balance_sheet": _compact_rows(filing.balance_sheet, fy_only=True),
+        "cash_flow": _compact_rows(filing.cash_flow, fy_only=True),
         "segments": _compact_rows(filing.segments),
         "buyback_history": [b.model_dump() for b in filing.buyback_history],
         "dividend_per_share_history": filing.dividend_per_share_history,
@@ -173,8 +180,8 @@ def data_for_net_cash(ctx: Any) -> dict[str, Any]:
         "has_filing": True,
         "filing_meta": {"currency": filing.filing_meta.currency,
                         "market_currency": filing.filing_meta.market_currency},
-        "balance_sheet": _compact_rows(filing.balance_sheet),
-        "cash_flow": _compact_rows(filing.cash_flow),
+        "balance_sheet": _compact_rows(filing.balance_sheet, fy_only=True),
+        "cash_flow": _compact_rows(filing.cash_flow, fy_only=True),
         "debt_schedule": [d.model_dump() for d in filing.debt_schedule],
         "buyback_history": [b.model_dump() for b in filing.buyback_history],
         "dividend_per_share_history": filing.dividend_per_share_history,
@@ -195,9 +202,9 @@ def data_for_valuation(ctx: Any) -> dict[str, Any]:
         "filing_meta": {"currency": filing.filing_meta.currency,
                         "market_currency": filing.filing_meta.market_currency,
                         "years_covered": filing.filing_meta.fiscal_years_covered},
-        "income_statement": _compact_rows(filing.income_statement),
-        "cash_flow": _compact_rows(filing.cash_flow),
-        "balance_sheet": _compact_rows(filing.balance_sheet),
+        "income_statement": _compact_rows(filing.income_statement, fy_only=True),
+        "cash_flow": _compact_rows(filing.cash_flow, fy_only=True),
+        "balance_sheet": _compact_rows(filing.balance_sheet, fy_only=True),
         "segments": _compact_rows(filing.segments),
         "market_snapshot": _get_market_snapshot(ctx),
     }
@@ -210,7 +217,7 @@ def data_for_moat(ctx: Any) -> dict[str, Any]:
         return {"has_filing": False}
     return {
         "has_filing": True,
-        "income_statement": _compact_rows(filing.income_statement),
+        "income_statement": _compact_rows(filing.income_statement, fy_only=True),
         "segments": _compact_rows(filing.segments),
         "concentration": filing.concentration.model_dump() if filing.concentration else None,
         "risk_factors": [r.model_dump() for r in filing.risk_factors],
@@ -225,9 +232,9 @@ def data_for_compounding(ctx: Any) -> dict[str, Any]:
         return {"has_filing": False}
     return {
         "has_filing": True,
-        "income_statement": _compact_rows(filing.income_statement),
-        "balance_sheet": _compact_rows(filing.balance_sheet),
-        "cash_flow": _compact_rows(filing.cash_flow),
+        "income_statement": _compact_rows(filing.income_statement, fy_only=True),
+        "balance_sheet": _compact_rows(filing.balance_sheet, fy_only=True),
+        "cash_flow": _compact_rows(filing.cash_flow, fy_only=True),
         "segments": _compact_rows(filing.segments),
         "buyback_history": [b.model_dump() for b in filing.buyback_history],
         "dividend_per_share_history": filing.dividend_per_share_history,
@@ -252,8 +259,8 @@ def data_for_psychology(ctx: Any) -> dict[str, Any]:
             directors_interests_text += f"\n\n[{year_key}]\n{sections['directors_interests']}"
     return {
         "has_filing": True,
-        "income_statement": _compact_rows(filing.income_statement),
-        "cash_flow": _compact_rows(filing.cash_flow),
+        "income_statement": _compact_rows(filing.income_statement, fy_only=True),
+        "cash_flow": _compact_rows(filing.cash_flow, fy_only=True),
         "buyback_history": [b.model_dump() for b in filing.buyback_history],
         "acquisition_history": [a.model_dump() for a in filing.acquisition_history],
         "special_items": [s.model_dump() for s in filing.special_items],
@@ -271,8 +278,8 @@ def data_for_systems(ctx: Any) -> dict[str, Any]:
         return {"has_filing": False}
     return {
         "has_filing": True,
-        "balance_sheet": _compact_rows(filing.balance_sheet),
-        "cash_flow": _compact_rows(filing.cash_flow),
+        "balance_sheet": _compact_rows(filing.balance_sheet, fy_only=True),
+        "cash_flow": _compact_rows(filing.cash_flow, fy_only=True),
         "debt_schedule": [d.model_dump() for d in filing.debt_schedule],
         "concentration": filing.concentration.model_dump() if filing.concentration else None,
         "segments": _compact_rows(filing.segments),
@@ -289,7 +296,7 @@ def data_for_ecology(ctx: Any) -> dict[str, Any]:
         return {"has_filing": False}
     return {
         "has_filing": True,
-        "income_statement": _compact_rows(filing.income_statement),
+        "income_statement": _compact_rows(filing.income_statement, fy_only=True),
         "segments": _compact_rows(filing.segments),
         "risk_factors": [r.model_dump() for r in filing.risk_factors],
         "mda": _get_mda(ctx),
@@ -329,6 +336,7 @@ def serialize_upstream_for_committee(ctx: Any) -> dict[str, Any]:
     if fq:
         result["financial_quality"] = {
             "pass": fq.pass_minimum_standard,
+            "enterprise_quality": fq.enterprise_quality,
             "scores": fq.scores.model_dump(),
             "strengths": fq.key_strengths,
             "failures": fq.key_failures,
@@ -386,9 +394,9 @@ def data_for_critic(ctx: Any) -> dict[str, Any]:
     if filing:
         filing_data = {
             "has_filing": True,
-            "income_statement": _compact_rows(filing.income_statement),
-            "balance_sheet": _compact_rows(filing.balance_sheet),
-            "cash_flow": _compact_rows(filing.cash_flow),
+            "income_statement": _compact_rows(filing.income_statement, fy_only=True),
+            "balance_sheet": _compact_rows(filing.balance_sheet, fy_only=True),
+            "cash_flow": _compact_rows(filing.cash_flow, fy_only=True),
             "segments": _compact_rows(filing.segments),
             "risk_factors": [r.model_dump() for r in filing.risk_factors],
             "special_items": [s.model_dump() for s in filing.special_items],
