@@ -35,6 +35,19 @@ def _bar(score: int, max_score: int = 10) -> str:
     return f"{filled}{empty}  {score}/{max_score}"
 
 
+def _truncate_for_debug(obj: Any, max_str_len: int = 2000) -> Any:
+    """Truncate long strings in nested dicts/lists for debug log readability."""
+    if isinstance(obj, str):
+        if len(obj) > max_str_len:
+            return obj[:max_str_len] + f"... ({len(obj)} chars total)"
+        return obj
+    elif isinstance(obj, dict):
+        return {k: _truncate_for_debug(v, max_str_len) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_truncate_for_debug(item, max_str_len) for item in obj]
+    return obj
+
+
 def _safe_get(ctx: PipelineContext, name: str) -> Any:
     try:
         return ctx.get_result(name)
@@ -140,12 +153,26 @@ def _render_filing(r: Any) -> str:
     lines.append(f"- 会计准则: **{m.accounting_standard}** | 货币: **{m.currency}** | 覆盖: {', '.join(m.fiscal_years_covered)}\n")
 
     if r.income_statement:
-        lines.append("### 利润表\n")
-        lines.append("| 年份 | 收入 | 毛利 | 毛利率 | 营业利润 | 净利润 |")
-        lines.append("|------|------|------|--------|---------|--------|")
-        for row in r.income_statement:
-            gm = f"{row.gross_profit / row.revenue * 100:.1f}%" if row.revenue and row.gross_profit else "N/A"
-            lines.append(f"| {row.fiscal_year} | {_fmt(row.revenue)} | {_fmt(row.gross_profit)} | {gm} | {_fmt(row.operating_income)} | {_fmt(row.net_income)} |")
+        # Group by fiscal_period: FY first, then H1, then others
+        fy_rows = [row for row in r.income_statement if getattr(row, 'fiscal_period', 'FY') == 'FY']
+        non_fy_rows = [row for row in r.income_statement if getattr(row, 'fiscal_period', 'FY') != 'FY']
+
+        if fy_rows:
+            lines.append("### 利润表（年度）\n")
+            lines.append("| 年份 | 收入 | 毛利 | 毛利率 | 营业利润 | 净利润 |")
+            lines.append("|------|------|------|--------|---------|--------|")
+            for row in sorted(fy_rows, key=lambda r: r.fiscal_year, reverse=True):
+                gm = f"{row.gross_profit / row.revenue * 100:.1f}%" if row.revenue and row.gross_profit else "N/A"
+                lines.append(f"| {row.fiscal_year} | {_fmt(row.revenue)} | {_fmt(row.gross_profit)} | {gm} | {_fmt(row.operating_income)} | {_fmt(row.net_income)} |")
+
+        if non_fy_rows:
+            lines.append("\n### 利润表（中期/季度）\n")
+            lines.append("| 期间 | 收入 | 毛利 | 毛利率 | 营业利润 | 净利润 |")
+            lines.append("|------|------|------|--------|---------|--------|")
+            for row in sorted(non_fy_rows, key=lambda r: f"{r.fiscal_year}_{getattr(r, 'fiscal_period', '')}", reverse=True):
+                gm = f"{row.gross_profit / row.revenue * 100:.1f}%" if row.revenue and row.gross_profit else "N/A"
+                period = getattr(row, 'fiscal_period', '')
+                lines.append(f"| {row.fiscal_year} {period} | {_fmt(row.revenue)} | {_fmt(row.gross_profit)} | {gm} | {_fmt(row.operating_income)} | {_fmt(row.net_income)} |")
 
     return "\n".join(lines)
 
@@ -230,7 +257,15 @@ def _render_valuation(r: Any) -> str:
     lines.append(f"| Bear | {_pct(e.bear)} | {_pct(f.bear)} |")
     lines.append(f"| **Base** | **{_pct(e.base)}** | **{_pct(f.base)}** |")
     lines.append(f"| Bull | {_pct(e.bull)} | {_pct(f.bull)} |")
-    lines.append(f"\n**{'达标' if r.meets_hurdle_rate else '未达标'}**: 基准回报 {_pct(f.base)} {'>' if r.meets_hurdle_rate else '<'} 10% 门槛")
+    lines.append(f"\n**{'达标' if r.meets_hurdle_rate else '未达标'}**: 基准回报 {_pct(f.base)} {'>' if r.meets_hurdle_rate else '<'} 门槛利率")
+    if hasattr(r, "key_assumptions") and r.key_assumptions:
+        lines.append("\n### 核心假设\n")
+        for a in r.key_assumptions:
+            lines.append(f"- {a}")
+    if hasattr(r, "sensitivity_drivers") and r.sensitivity_drivers:
+        lines.append("\n### 敏感性驱动\n")
+        for s in r.sensitivity_drivers:
+            lines.append(f"- {s}")
     return "\n".join(lines)
 
 
@@ -306,7 +341,8 @@ def generate_report(
     committee = _safe_get(ctx, "committee")
     if committee:
         label = committee.final_label.value
-        parts.append(f"## 最终结论: **{label}**\n")
+        conf = f" (置信度: {committee.confidence})" if committee.confidence else ""
+        parts.append(f"## 最终结论: **{label}**{conf}\n")
     elif ctx.is_stopped():
         parts.append(f"## Pipeline 停止: {ctx.stop_reason}\n")
 
@@ -386,6 +422,25 @@ def generate_debug_log(
         "agents": {},
     }
 
+    # Serialize pipeline_data (raw sections, MDA, etc.)
+    pipeline_data: dict[str, Any] = {}
+    for key in ("raw_sections_by_year", "mda_by_year", "filing_documents"):
+        try:
+            val = ctx.get_data(key)
+            if val is not None:
+                # FilingDocument objects need serialization
+                if key == "filing_documents" and isinstance(val, list):
+                    pipeline_data[key] = [
+                        d.model_dump(mode="json") if hasattr(d, "model_dump") else str(d)
+                        for d in val
+                    ]
+                else:
+                    pipeline_data[key] = val
+        except KeyError:
+            pass
+    if pipeline_data:
+        log["pipeline_data"] = pipeline_data
+
     total_tokens = 0
     for name in completed:
         result = _safe_get(ctx, name)
@@ -395,6 +450,16 @@ def generate_debug_log(
         tokens = result.meta.token_usage
         total_tokens += tokens
 
+        # Retrieve captured input data
+        agent_input = None
+        try:
+            raw_input = ctx.get_data(f"_agent_input_{name}")
+            if raw_input is not None:
+                # Serialize, but truncate very large string values (>2000 chars)
+                agent_input = _truncate_for_debug(raw_input)
+        except KeyError:
+            pass
+
         log["agents"][name] = {
             "meta": {
                 "agent_name": result.meta.agent_name,
@@ -402,6 +467,7 @@ def generate_debug_log(
                 "model_used": result.meta.model_used,
                 "token_usage": tokens,
             },
+            "input": agent_input,
             "output": result.model_dump(exclude={"meta"}, mode="json"),
         }
 

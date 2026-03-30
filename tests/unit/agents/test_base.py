@@ -59,5 +59,5 @@ def test_prepare_tool_schema_required_strips_meta():
 def test_render_system_prompt():
     agent = _ConcreteAgent(llm=_mock_llm())
     system = agent._render_system_prompt()
-    assert "Munger-style" in system
+    assert "芒格" in system
     assert "Test agent" in system

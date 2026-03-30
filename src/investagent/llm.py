@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import anthropic
+import httpx
 
 
 class LLMClient:
@@ -24,10 +25,19 @@ class LLMClient:
         client: anthropic.AsyncAnthropic | None = None,
         extra_body: dict[str, Any] | None = None,
     ) -> None:
-        self._client = client or anthropic.AsyncAnthropic(
-            base_url=base_url,
-            api_key=api_key,
-        )
+        if client:
+            self._client = client
+        else:
+            # Use a custom httpx client to handle proxies with self-signed certs
+            http_client = httpx.AsyncClient(verify=False) if base_url else None
+            kwargs: dict[str, Any] = {}
+            if base_url:
+                kwargs["base_url"] = base_url
+            if api_key:
+                kwargs["api_key"] = api_key
+            if http_client:
+                kwargs["http_client"] = http_client
+            self._client = anthropic.AsyncAnthropic(**kwargs)
         self.model = model
         self._extra_body = extra_body or {}
 

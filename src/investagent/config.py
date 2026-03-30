@@ -7,6 +7,7 @@ import logging
 import os
 import time
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,12 @@ _PROVIDER_DEFAULTS: dict[str, dict[str, str | None]] = {
         "base_url_default": "https://api.minimaxi.com/anthropic",
         "base_url_env": "MINIMAX_BASE_URL",
         "api_key_env": "MINIMAX_API_KEY",
+    },
+    "deepseek": {
+        "default_model": "deepseek-reasoner",
+        "base_url_default": "https://api.deepseek.com/v1",
+        "base_url_env": "DEEPSEEK_BASE_URL",
+        "api_key_env": "DEEPSEEK_API_KEY",
     },
 }
 
@@ -151,3 +158,50 @@ class Settings:
         """Return 2× risk-free rate for the given currency."""
         rfr = self.risk_free_rates.get(currency, 0.04)
         return round(rfr * 2, 4)
+
+
+def create_llm_client(
+    provider: str,
+    *,
+    model: str | None = None,
+    extra_body: dict[str, Any] | None = None,
+) -> "LLMClient":
+    """Create an LLMClient for a specific provider.
+
+    Reads API key and base URL from environment variables defined in
+    _PROVIDER_DEFAULTS. Allows multiple providers to coexist (e.g.,
+    MiniMax for exclusion, DeepSeek R1 for analysis).
+    """
+    from investagent.llm import LLMClient
+
+    if provider not in _PROVIDER_DEFAULTS:
+        raise ValueError(
+            f"Unknown provider {provider!r}. Supported: {list(_PROVIDER_DEFAULTS)}"
+        )
+
+    prov = _PROVIDER_DEFAULTS[provider]
+    model_name = model or prov["default_model"]
+
+    # Base URL
+    base_url_env = prov.get("base_url_env")
+    if base_url_env:
+        base_url: str | None = os.getenv(base_url_env, prov.get("base_url_default"))
+    else:
+        base_url = prov.get("base_url")
+
+    # API key
+    api_key: str | None = None
+    api_key_env = prov.get("api_key_env")
+    if api_key_env:
+        api_key = os.getenv(api_key_env)
+        if not api_key:
+            raise ValueError(
+                f"Provider {provider!r} requires the {api_key_env} environment variable"
+            )
+
+    return LLMClient(
+        model=model_name,  # type: ignore[arg-type]
+        base_url=base_url,
+        api_key=api_key,
+        extra_body=extra_body,
+    )

@@ -12,6 +12,9 @@ dependencies = [
     "yfinance",
     "pymupdf4llm",
     "akshare",
+    "backtrader>=1.9.78.123",
+    "matplotlib>=3.10.8",
+    "python-dotenv>=1.2.2",
 ]
 
 [dependency-groups]

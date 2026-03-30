@@ -1,0 +1,706 @@
+#!/usr/bin/env python3
+"""Overnight large-scale A-share pipeline evaluation.
+
+Screens top N A-share stocks by market cap through the full investagent
+pipeline. Designed to run overnight with checkpoint/resume support.
+
+Usage:
+    uv run python scripts/run_overnight.py [--top 2000] [--pipeline-concurrency 5]
+
+Resume after crash:
+    # Just re-run — checkpoints auto-skip completed stocks
+    uv run python scripts/run_overnight.py
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import logging
+import re
+import sys
+import time
+from datetime import date
+from pathlib import Path
+from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+
+import pandas as pd
+
+from investagent.config import create_llm_client
+from investagent.datasources.akshare_source import fetch_a_share_financials
+from investagent.llm import LLMClient
+from investagent.schemas.company import CompanyIntake
+from investagent.schemas.filing import BalanceSheetRow, CashFlowRow, IncomeStatementRow
+from investagent.screening.ratio_calc import compute_ratios, should_skip_by_ratios
+from investagent.screening.screener import ScreenerAgent, ScreenerInput
+from investagent.workflow.orchestrator import run_pipeline
+from investagent.agents.portfolio import (
+    CandidateInfo,
+    PortfolioAgent,
+    PortfolioInput,
+)
+
+OUTPUT_DIR = Path(__file__).resolve().parents[1] / "data" / "overnight"
+CHECKPOINT_DIR = OUTPUT_DIR / "checkpoints"
+
+_EXCHANGE_MAP = {
+    "6": "SSE", "9": "SSE",
+    "0": "SZSE", "3": "SZSE", "2": "SZSE",
+    "4": "BSE", "8": "BSE",
+}
+
+logger = logging.getLogger("overnight")
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint helpers
+# ---------------------------------------------------------------------------
+
+def _load_checkpoint(phase: str, key: str) -> dict | None:
+    f = CHECKPOINT_DIR / phase / f"{key}.json"
+    if f.exists():
+        try:
+            return json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return None
+
+
+def _save_checkpoint(phase: str, key: str, data: dict) -> None:
+    d = CHECKPOINT_DIR / phase
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"{key}.json").write_text(
+        json.dumps(data, ensure_ascii=False, indent=2, default=str),
+        encoding="utf-8",
+    )
+
+
+def _count_checkpoints(phase: str) -> int:
+    d = CHECKPOINT_DIR / phase
+    if not d.exists():
+        return 0
+    return len(list(d.glob("*.json")))
+
+
+# ---------------------------------------------------------------------------
+# Phase 1: Universe Construction
+# ---------------------------------------------------------------------------
+
+def _build_industry_map() -> dict[str, str]:
+    """Build ticker -> industry mapping from AkShare board data (bulk)."""
+    import akshare as ak
+    industry_map: dict[str, str] = {}
+    try:
+        boards = ak.stock_board_industry_name_em()
+        board_names = [str(row["板块名称"]) for _, row in boards.iterrows()]
+        logger.info("Fetching industry constituents for %d boards...", len(board_names))
+        for i, board_name in enumerate(board_names):
+            try:
+                cons = ak.stock_board_industry_cons_em(symbol=board_name)
+                for _, row in cons.iterrows():
+                    ticker = str(row["代码"])
+                    if ticker not in industry_map:
+                        industry_map[ticker] = board_name
+            except Exception:
+                pass
+            if (i + 1) % 20 == 0:
+                logger.info("  Industry boards: %d/%d (%d tickers mapped)",
+                            i + 1, len(board_names), len(industry_map))
+        logger.info("Industry map: %d tickers", len(industry_map))
+    except Exception:
+        logger.warning("Failed to build industry map, continuing without")
+    return industry_map
+
+
+def build_top_universe(top_n: int) -> list[dict[str, Any]]:
+    """Fetch top A-shares by market cap with exclusions applied."""
+    import akshare as ak
+
+    # 1. All A-shares with market cap
+    logger.info("Fetching all A-share stocks...")
+    df = ak.stock_zh_a_spot_em()
+    logger.info("Total A-shares from spot data: %d", len(df))
+
+    df = df[pd.notna(df["总市值"]) & (df["总市值"] > 0)]
+    df = df.sort_values("总市值", ascending=False)
+
+    # 2. Industry map (bulk)
+    industry_map = _build_industry_map()
+
+    # 3. Financial sector exclusion set (substring match)
+    financial_keywords = ("银行", "保险", "证券", "金融", "信托", "期货", "租赁")
+    financial_tickers: set[str] = set()
+    for ticker, ind in industry_map.items():
+        if any(kw in ind for kw in financial_keywords):
+            financial_tickers.add(ticker)
+    logger.info("Financial sector tickers: %d", len(financial_tickers))
+
+    # 4. Build stock list with exclusions
+    stocks: list[dict[str, Any]] = []
+    excluded_st = 0
+    excluded_fin = 0
+    for _, row in df.iterrows():
+        ticker = str(row["代码"])
+        name = str(row["名称"])
+        market_cap = float(row["总市值"])
+
+        if re.match(r"^[\*]?ST", name):
+            excluded_st += 1
+            continue
+        if ticker in financial_tickers:
+            excluded_fin += 1
+            continue
+
+        stocks.append({
+            "ticker": ticker,
+            "name": name,
+            "market_cap": market_cap,
+            "industry": industry_map.get(ticker, ""),
+        })
+
+        if len(stocks) >= top_n:
+            break
+
+    logger.info(
+        "Universe: %d stocks (excluded: %d ST, %d financial) | "
+        "largest: %s %.0f亿 | smallest: %s %.0f亿",
+        len(stocks), excluded_st, excluded_fin,
+        stocks[0]["name"], stocks[0]["market_cap"] / 1e8,
+        stocks[-1]["name"], stocks[-1]["market_cap"] / 1e8,
+    )
+    return stocks
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: Ratio Computation
+# ---------------------------------------------------------------------------
+
+async def compute_all_ratios(
+    stocks: list[dict], concurrency: int = 5,
+) -> list[dict]:
+    """Compute financial ratios for all stocks via AkShare."""
+    sem = asyncio.Semaphore(concurrency)
+    total = len(stocks)
+    done = [0]
+    start = time.time()
+    cached_count = _count_checkpoints("ratios")
+    if cached_count:
+        logger.info("Ratios: %d already cached", cached_count)
+
+    async def _compute(stock: dict) -> dict:
+        ticker = stock["ticker"]
+
+        cached = _load_checkpoint("ratios", ticker)
+        if cached is not None:
+            done[0] += 1
+            return {**stock, "ratios": cached.get("ratios", {})}
+
+        async with sem:
+            try:
+                financials = await asyncio.to_thread(fetch_a_share_financials, ticker)
+                income = [IncomeStatementRow(**r) for r in financials.get("income_statement", [])]
+                balance = [BalanceSheetRow(**r) for r in financials.get("balance_sheet", [])]
+                cash_flow = [CashFlowRow(**r) for r in financials.get("cash_flow", [])]
+                ratios = compute_ratios(income, balance, cash_flow)
+                stock["ratios"] = ratios
+                _save_checkpoint("ratios", ticker, {"ratios": ratios})
+            except Exception:
+                stock["ratios"] = {}
+
+            done[0] += 1
+            if done[0] % 100 == 0 or done[0] == total:
+                elapsed = time.time() - start
+                rate = done[0] / elapsed if elapsed > 0 else 1
+                eta = (total - done[0]) / rate
+                logger.info("Ratios: %d/%d (%.1f/s, ETA %.0fm)", done[0], total, rate, eta / 60)
+            return stock
+
+    results = await asyncio.gather(*[_compute(s) for s in stocks])
+    return list(results)
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: LLM Screening
+# ---------------------------------------------------------------------------
+
+async def screen_all(
+    stocks: list[dict], llm: LLMClient, concurrency: int = 20,
+) -> tuple[list[dict], list[dict]]:
+    """Screen all stocks with ScreenerAgent. Returns (proceed, skipped)."""
+    screener = ScreenerAgent(llm=llm)
+    sem = asyncio.Semaphore(concurrency)
+    total = len(stocks)
+    done = [0]
+    start = time.time()
+    cached_count = _count_checkpoints("screening")
+    if cached_count:
+        logger.info("Screening: %d already cached", cached_count)
+
+    async def _screen(stock: dict) -> dict:
+        ticker = stock["ticker"]
+
+        cached = _load_checkpoint("screening", ticker)
+        if cached is not None:
+            done[0] += 1
+            return cached
+
+        async with sem:
+            market_cap_str = ""
+            mc = stock.get("market_cap")
+            if mc and mc > 0:
+                market_cap_str = f"{mc / 1e8:.0f}亿"
+
+            inp = ScreenerInput(
+                ticker=ticker,
+                name=stock.get("name", ""),
+                industry=stock.get("industry", ""),
+                market_cap=market_cap_str,
+                ratios=stock.get("ratios", {}),
+            )
+            try:
+                result = await screener.run(inp)
+                r = {
+                    "ticker": ticker,
+                    "name": stock.get("name", ""),
+                    "market_cap": stock.get("market_cap"),
+                    "industry": stock.get("industry", ""),
+                    "decision": result.decision,
+                    "reason": result.reason,
+                    "industry_context": getattr(result, "industry_context", ""),
+                }
+            except Exception as e:
+                logger.warning("Screening failed for %s %s: %s", ticker, stock.get("name", ""), e)
+                r = {
+                    "ticker": ticker, "name": stock.get("name", ""),
+                    "market_cap": stock.get("market_cap"),
+                    "industry": stock.get("industry", ""),
+                    "decision": "SKIP", "reason": "screener_error",
+                }
+
+            _save_checkpoint("screening", ticker, r)
+            done[0] += 1
+            if done[0] % 50 == 0 or done[0] == total:
+                elapsed = time.time() - start
+                rate = done[0] / elapsed if elapsed > 0 else 1
+                eta = (total - done[0]) / rate
+                logger.info("Screening: %d/%d (%.1f/s, ETA %.0fm)", done[0], total, rate, eta / 60)
+            return r
+
+    results = await asyncio.gather(*[_screen(s) for s in stocks])
+
+    proceed = [r for r in results if r.get("decision") in ("PROCEED", "SPECIAL_CASE")]
+    skipped = [r for r in results if r.get("decision") not in ("PROCEED", "SPECIAL_CASE")]
+
+    logger.info("Screening complete: %d PROCEED + %d SKIP = %d total",
+                len(proceed), len(skipped), len(results))
+    return proceed, skipped
+
+
+# ---------------------------------------------------------------------------
+# Phase 4: Full Pipeline
+# ---------------------------------------------------------------------------
+
+def _extract_result(ctx: Any, stock: dict) -> dict:
+    """Extract pipeline results for serialization."""
+    result: dict[str, Any] = {
+        "ticker": stock["ticker"],
+        "name": stock.get("name", ""),
+        "market_cap": stock.get("market_cap"),
+        "industry": stock.get("industry", ""),
+        "stopped": ctx.is_stopped(),
+        "stop_reason": ctx.stop_reason,
+        "agents_completed": len(ctx.completed_agents()),
+        "completed_agents": ctx.completed_agents(),
+    }
+
+    try:
+        committee = ctx.get_result("committee")
+        result["final_label"] = (
+            committee.final_label.value
+            if hasattr(committee.final_label, "value")
+            else str(committee.final_label)
+        )
+        result["confidence"] = getattr(committee, "confidence", "")
+        result["thesis"] = getattr(committee, "thesis", "")
+        result["anti_thesis"] = getattr(committee, "anti_thesis", "")
+    except (KeyError, AttributeError):
+        result["final_label"] = "STOPPED" if ctx.is_stopped() else "ERROR"
+
+    try:
+        val = ctx.get_result("valuation")
+        result["price_vs_value"] = getattr(val, "price_vs_value", "")
+        result["margin_of_safety_pct"] = getattr(val, "margin_of_safety_pct", None)
+        result["meets_hurdle_rate"] = getattr(val, "meets_hurdle_rate", False)
+    except (KeyError, AttributeError):
+        pass
+
+    try:
+        fq = ctx.get_result("financial_quality")
+        result["enterprise_quality"] = getattr(fq, "enterprise_quality", "")
+        result["pass_minimum"] = getattr(fq, "pass_minimum_standard", False)
+    except (KeyError, AttributeError):
+        pass
+
+    return result
+
+
+async def pipeline_all(
+    stocks: list[dict], llm: LLMClient, concurrency: int = 5,
+) -> list[dict]:
+    """Run full pipeline on all stocks with progress tracking."""
+    sem = asyncio.Semaphore(concurrency)
+    total = len(stocks)
+    done = [0]
+    start = time.time()
+    label_counts: dict[str, int] = {}
+    cached_count = _count_checkpoints("pipeline")
+    if cached_count:
+        logger.info("Pipeline: %d already cached", cached_count)
+
+    async def _run(stock: dict) -> dict:
+        ticker = stock["ticker"]
+
+        cached = _load_checkpoint("pipeline", ticker)
+        if cached is not None:
+            done[0] += 1
+            label = cached.get("final_label", "?")
+            label_counts[label] = label_counts.get(label, 0) + 1
+            return cached
+
+        async with sem:
+            t0 = time.time()
+            exchange = _EXCHANGE_MAP.get(ticker[0], "SSE")
+            intake = CompanyIntake(
+                ticker=ticker,
+                name=stock.get("name", ticker),
+                exchange=exchange,
+                sector=stock.get("industry"),
+            )
+            try:
+                ctx = await run_pipeline(intake, llm=llm)
+                result = _extract_result(ctx, stock)
+            except Exception as e:
+                logger.error("Pipeline FAILED for %s %s: %s", ticker, stock.get("name", ""), e)
+                result = {
+                    "ticker": ticker, "name": stock.get("name", ""),
+                    "market_cap": stock.get("market_cap"),
+                    "industry": stock.get("industry", ""),
+                    "final_label": "ERROR", "error": str(e),
+                    "stopped": True, "agents_completed": 0,
+                }
+
+            elapsed_one = time.time() - t0
+            result["pipeline_seconds"] = round(elapsed_one, 1)
+            # Don't checkpoint errors (rate limits etc) so they get retried on resume
+            if result.get("final_label") != "ERROR":
+                _save_checkpoint("pipeline", ticker, result)
+
+            done[0] += 1
+            label = result.get("final_label", "?")
+            label_counts[label] = label_counts.get(label, 0) + 1
+
+            total_elapsed = time.time() - start
+            rate = done[0] / total_elapsed if total_elapsed > 0 else 0.01
+            eta_h = (total - done[0]) / rate / 3600
+
+            dist = " ".join(f"{k}:{v}" for k, v in sorted(label_counts.items()))
+            logger.info(
+                "Pipeline %d/%d: %s %s -> %s (%.0fs) | ETA %.1fh | %s",
+                done[0], total, ticker, stock.get("name", ""), label,
+                elapsed_one, eta_h, dist,
+            )
+            return result
+
+    results = await asyncio.gather(*[_run(s) for s in stocks])
+    return list(results)
+
+
+# ---------------------------------------------------------------------------
+# Phase 5: Portfolio
+# ---------------------------------------------------------------------------
+
+async def build_portfolio(results: list[dict], llm: LLMClient) -> dict:
+    """Build portfolio from INVESTABLE candidates."""
+    candidates = []
+    for r in results:
+        if r.get("final_label") != "INVESTABLE":
+            continue
+        candidates.append(CandidateInfo(
+            ticker=r["ticker"],
+            name=r.get("name", ""),
+            industry=r.get("industry", ""),
+            enterprise_quality=r.get("enterprise_quality", ""),
+            price_vs_value=r.get("price_vs_value", ""),
+            margin_of_safety_pct=r.get("margin_of_safety_pct"),
+            meets_hurdle_rate=r.get("meets_hurdle_rate", False),
+            thesis=r.get("thesis", ""),
+        ))
+
+    if not candidates:
+        logger.info("No INVESTABLE candidates. Portfolio: 100%% cash.")
+        return {"allocations": [], "cash_weight": 1.0}
+
+    logger.info("Building portfolio from %d INVESTABLE candidates", len(candidates))
+    agent = PortfolioAgent(llm=llm)
+    inp = PortfolioInput(candidates=candidates, available_cash_pct=1.0)
+
+    try:
+        result = await agent.run(inp)
+        portfolio = {
+            "allocations": [
+                {"ticker": a.ticker, "name": a.name,
+                 "weight": a.target_weight, "reason": a.reason}
+                for a in result.allocations
+            ],
+            "cash_weight": result.cash_weight,
+            "industry_distribution": result.industry_distribution,
+            "rebalance_actions": result.rebalance_actions,
+        }
+        for a in result.allocations:
+            logger.info("  %s %s: %.0f%% - %s",
+                        a.ticker, a.name, a.target_weight * 100, a.reason)
+        return portfolio
+    except Exception as e:
+        logger.error("Portfolio construction failed: %s", e)
+        return {"allocations": [], "cash_weight": 1.0, "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+async def main(
+    top_n: int = 2000,
+    pipeline_concurrency: int = 5,
+    screening_concurrency: int = 20,
+    ratio_concurrency: int = 5,
+) -> None:
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Logging: file gets everything, console gets overnight + warnings
+    file_handler = logging.FileHandler(
+        str(OUTPUT_DIR / "overnight.log"), encoding="utf-8",
+    )
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(
+        logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s"),
+    )
+    logging.getLogger().addHandler(file_handler)
+    logging.getLogger().setLevel(logging.WARNING)
+
+    # Overnight logger: visible on console
+    console = logging.StreamHandler()
+    console.setLevel(logging.INFO)
+    console.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(message)s"),
+    )
+    logger.addHandler(console)
+    logger.setLevel(logging.INFO)
+
+    total_start = time.time()
+    logger.info("=" * 60)
+    logger.info("OVERNIGHT A-SHARE EVALUATION")
+    logger.info("  Top %d by market cap", top_n)
+    logger.info("  Pipeline concurrency: %d", pipeline_concurrency)
+    logger.info("  Screening concurrency: %d", screening_concurrency)
+    logger.info("  Output: %s", OUTPUT_DIR)
+    logger.info("=" * 60)
+
+    llm = create_llm_client("minimax", extra_body={
+        "context_window_size": 200000,
+        "effort": "high",
+    })
+
+    # ---- Phase 1: Universe ----
+    logger.info("Phase 1: Building universe...")
+    t0 = time.time()
+    universe = await asyncio.to_thread(build_top_universe, top_n)
+    logger.info("Phase 1 done: %d stocks (%.1fs)", len(universe), time.time() - t0)
+
+    # Save universe for reference
+    _save_checkpoint("_meta", "universe", {
+        "count": len(universe),
+        "stocks": [{"ticker": s["ticker"], "name": s["name"],
+                     "market_cap": s["market_cap"], "industry": s["industry"]}
+                    for s in universe],
+    })
+
+    # ---- Phase 2: Ratios ----
+    logger.info("Phase 2: Computing ratios for %d stocks...", len(universe))
+    t0 = time.time()
+    universe = await compute_all_ratios(universe, concurrency=ratio_concurrency)
+    has_ratios = sum(1 for s in universe if s.get("ratios"))
+    logger.info("Phase 2 done: %d/%d have ratios (%.1fs)", has_ratios, len(universe), time.time() - t0)
+
+    # ---- Phase 2.5: Quantitative pre-filter ----
+    pre_filtered = []
+    pre_skipped = []
+    for s in universe:
+        reason = should_skip_by_ratios(s.get("ratios", {}))
+        if reason:
+            s["prefilter_skip"] = reason
+            pre_skipped.append(s)
+        else:
+            pre_filtered.append(s)
+    logger.info("Pre-filter: %d pass, %d skip (consecutive loss/low ROE/shrinking rev/poor cash)",
+                len(pre_filtered), len(pre_skipped))
+
+    # ---- Phase 3: Screening ----
+    logger.info("Phase 3: LLM screening %d stocks...", len(pre_filtered))
+    t0 = time.time()
+    proceed, skipped = await screen_all(pre_filtered, llm, concurrency=screening_concurrency)
+    logger.info("Phase 3 done: %d PROCEED, %d SKIP (%.1fs)",
+                len(proceed), len(skipped), time.time() - t0)
+
+    # Save screening summary
+    _save_checkpoint("_meta", "screening_summary", {
+        "total": len(universe),
+        "proceed": len(proceed),
+        "skipped": len(skipped),
+        "pass_rate": f"{len(proceed) / max(len(universe), 1) * 100:.1f}%",
+        "proceed_tickers": [s["ticker"] for s in proceed],
+        "skip_sample": [
+            {"ticker": s["ticker"], "name": s["name"], "reason": s.get("reason", "")}
+            for s in skipped[:50]
+        ],
+    })
+
+    # ---- Phase 4: Full pipeline ----
+    logger.info("Phase 4: Running full pipeline on %d stocks (concurrency=%d)...",
+                len(proceed), pipeline_concurrency)
+    t0 = time.time()
+    pipeline_results = await pipeline_all(proceed, llm, concurrency=pipeline_concurrency)
+    phase4_elapsed = time.time() - t0
+    logger.info("Phase 4 done: %d analyzed (%.1fh)", len(pipeline_results), phase4_elapsed / 3600)
+
+    # ---- Phase 5: Portfolio ----
+    logger.info("Phase 5: Portfolio construction...")
+    portfolio = await build_portfolio(pipeline_results, llm)
+
+    # ---- Phase 6: Report ----
+    total_elapsed = time.time() - total_start
+
+    label_counts: dict[str, int] = {}
+    for r in pipeline_results:
+        label = r.get("final_label", "?")
+        label_counts[label] = label_counts.get(label, 0) + 1
+
+    top_candidates = sorted(
+        [r for r in pipeline_results
+         if r.get("final_label") in ("INVESTABLE", "DEEP_DIVE", "WATCHLIST", "SPECIAL_SITUATION")],
+        key=lambda r: (
+            {"INVESTABLE": 0, "DEEP_DIVE": 1, "SPECIAL_SITUATION": 2, "WATCHLIST": 3}
+            .get(r.get("final_label", ""), 9),
+            -(r.get("margin_of_safety_pct") or -999),
+        ),
+    )
+
+    summary = {
+        "run_date": date.today().isoformat(),
+        "config": {
+            "top_n": top_n,
+            "pipeline_concurrency": pipeline_concurrency,
+            "screening_concurrency": screening_concurrency,
+        },
+        "timing": {
+            "total_seconds": round(total_elapsed, 1),
+            "total_hours": round(total_elapsed / 3600, 2),
+            "pipeline_hours": round(phase4_elapsed / 3600, 2),
+        },
+        "universe_size": len(universe),
+        "screening": {
+            "proceed": len(proceed),
+            "skipped": len(skipped),
+            "pass_rate": f"{len(proceed) / max(len(universe), 1) * 100:.1f}%",
+        },
+        "pipeline": {
+            "total_analyzed": len(pipeline_results),
+            "label_distribution": label_counts,
+        },
+        "top_candidates": [
+            {
+                "ticker": r["ticker"],
+                "name": r.get("name", ""),
+                "market_cap_yi": round(r.get("market_cap", 0) / 1e8, 1),
+                "industry": r.get("industry", ""),
+                "final_label": r.get("final_label"),
+                "confidence": r.get("confidence"),
+                "enterprise_quality": r.get("enterprise_quality"),
+                "price_vs_value": r.get("price_vs_value"),
+                "margin_of_safety_pct": r.get("margin_of_safety_pct"),
+                "meets_hurdle": r.get("meets_hurdle_rate"),
+                "thesis": (r.get("thesis") or "")[:300],
+            }
+            for r in top_candidates[:50]
+        ],
+        "portfolio": portfolio,
+    }
+
+    output_file = OUTPUT_DIR / "results.json"
+    output_file.write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2, default=str),
+        encoding="utf-8",
+    )
+
+    full_file = OUTPUT_DIR / "full_pipeline_results.json"
+    full_file.write_text(
+        json.dumps(pipeline_results, ensure_ascii=False, indent=2, default=str),
+        encoding="utf-8",
+    )
+
+    screening_file = OUTPUT_DIR / "screening_results.json"
+    screening_file.write_text(
+        json.dumps(proceed + skipped, ensure_ascii=False, indent=2, default=str),
+        encoding="utf-8",
+    )
+
+    # Print summary
+    logger.info("=" * 60)
+    logger.info("OVERNIGHT EVALUATION COMPLETE")
+    logger.info("=" * 60)
+    logger.info("Total time: %.1fh (pipeline: %.1fh)", total_elapsed / 3600, phase4_elapsed / 3600)
+    logger.info("Universe: %d -> Screening: %d PROCEED -> Pipeline: %d analyzed",
+                len(universe), len(proceed), len(pipeline_results))
+    logger.info("Label distribution: %s",
+                " | ".join(f"{k}: {v}" for k, v in sorted(label_counts.items())))
+    if top_candidates:
+        logger.info("Top candidates:")
+        for r in top_candidates[:15]:
+            logger.info(
+                "  %s %s [%s] %s | Q=%s V=%s MoS=%.1f%%",
+                r["ticker"], r.get("name", ""),
+                r.get("industry", ""),
+                r.get("final_label", "?"),
+                r.get("enterprise_quality", "?"),
+                r.get("price_vs_value", "?"),
+                r.get("margin_of_safety_pct") or 0,
+            )
+    logger.info("Portfolio: %d positions, %.0f%% cash",
+                len(portfolio.get("allocations", [])),
+                portfolio.get("cash_weight", 1) * 100)
+    logger.info("Results: %s", output_file)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Overnight A-share evaluation")
+    parser.add_argument("--top", type=int, default=2000,
+                        help="Top N stocks by market cap (default: 2000)")
+    parser.add_argument("--pipeline-concurrency", type=int, default=5,
+                        help="Concurrent pipeline runs (default: 5)")
+    parser.add_argument("--screening-concurrency", type=int, default=20,
+                        help="Concurrent screening calls (default: 20)")
+    parser.add_argument("--ratio-concurrency", type=int, default=5,
+                        help="Concurrent AkShare ratio fetches (default: 5)")
+    args = parser.parse_args()
+    asyncio.run(main(
+        top_n=args.top,
+        pipeline_concurrency=args.pipeline_concurrency,
+        screening_concurrency=args.screening_concurrency,
+        ratio_concurrency=args.ratio_concurrency,
+    ))

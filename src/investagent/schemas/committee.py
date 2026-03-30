@@ -18,6 +18,7 @@ class FinalLabel(str, Enum):
 
 class CommitteeOutput(BaseAgentOutput):
     final_label: FinalLabel
+    confidence: str = ""  # e.g. "HIGH", "MEDIUM", "LOW"
     thesis: str
     anti_thesis: str
     largest_unknowns: list[str]

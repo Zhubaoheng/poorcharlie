@@ -243,10 +243,13 @@ _HK_CF_MAP: dict[str, str] = {
     "购建固定资产": "capex",
     "已付股利": "dividends_paid",
     "已付股息": "dividends_paid",
+    "已付股息(融资)": "dividends_paid",
     "回购股份": "buyback_amount",
     "偿还借贷": "debt_repaid",
+    "偿还借款": "debt_repaid",
     "新增借贷": "debt_issued",
-    "融资业务现金净额": "debt_issued",  # approximate
+    "新增借款": "debt_issued",
+    "收购附属公司": "acquisitions",
 }
 
 

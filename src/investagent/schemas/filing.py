@@ -52,6 +52,7 @@ class IncomeStatementRow(BaseModel, frozen=True):
 
 class BalanceSheetRow(BaseModel, frozen=True):
     fiscal_year: str
+    fiscal_period: str = "FY"  # "FY" | "H1" | "Q1" etc.
     cash_and_equivalents: float | None = None
     short_term_investments: float | None = None
     accounts_receivable: float | None = None
@@ -72,6 +73,7 @@ class BalanceSheetRow(BaseModel, frozen=True):
 
 class CashFlowRow(BaseModel, frozen=True):
     fiscal_year: str
+    fiscal_period: str = "FY"  # "FY" | "H1" | "Q1" etc.
     operating_cash_flow: float | None = None
     capex: float | None = None
     free_cash_flow: float | None = None
@@ -111,7 +113,7 @@ class AccountingPolicyEntry(BaseModel, frozen=True):
 class DebtInstrument(BaseModel, frozen=True):
     instrument_type: str  # "bank_loan" | "bond" | "convertible" | "credit_facility"
     principal: float | None = None
-    interest_rate: float | None = None
+    interest_rate: float | str | None = None  # float or descriptive string like "2.4%-6.2%"
     maturity_date: str | None = None
     covenants: list[str] = []
     ranking: str | None = None  # "senior" | "subordinated" | "secured"
