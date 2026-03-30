@@ -92,43 +92,130 @@ def _count_checkpoints(phase: str) -> int:
 # Phase 1: Universe Construction
 # ---------------------------------------------------------------------------
 
-def _build_industry_map() -> dict[str, str]:
-    """Build ticker -> industry mapping from AkShare board data (bulk)."""
-    import akshare as ak
+def _build_industry_map_em(ak: Any) -> dict[str, str]:
+    """Primary: eastmoney board constituents."""
     industry_map: dict[str, str] = {}
-    try:
-        boards = ak.stock_board_industry_name_em()
-        board_names = [str(row["板块名称"]) for _, row in boards.iterrows()]
-        logger.info("Fetching industry constituents for %d boards...", len(board_names))
-        for i, board_name in enumerate(board_names):
-            try:
-                cons = ak.stock_board_industry_cons_em(symbol=board_name)
-                for _, row in cons.iterrows():
-                    ticker = str(row["代码"])
-                    if ticker not in industry_map:
-                        industry_map[ticker] = board_name
-            except Exception:
-                pass
-            if (i + 1) % 20 == 0:
-                logger.info("  Industry boards: %d/%d (%d tickers mapped)",
-                            i + 1, len(board_names), len(industry_map))
-        logger.info("Industry map: %d tickers", len(industry_map))
-    except Exception:
-        logger.warning("Failed to build industry map, continuing without")
+    boards = ak.stock_board_industry_name_em()
+    board_names = [str(row["板块名称"]) for _, row in boards.iterrows()]
+    logger.info("Fetching EM industry constituents for %d boards...", len(board_names))
+    for i, board_name in enumerate(board_names):
+        try:
+            cons = ak.stock_board_industry_cons_em(symbol=board_name)
+            for _, row in cons.iterrows():
+                ticker = str(row["代码"])
+                if ticker not in industry_map:
+                    industry_map[ticker] = board_name
+        except Exception:
+            pass
+        if (i + 1) % 20 == 0:
+            logger.info("  EM boards: %d/%d (%d tickers)", i + 1, len(board_names), len(industry_map))
     return industry_map
 
 
+def _build_industry_map_sw(ak: Any) -> dict[str, str]:
+    """Fallback: Shenwan L1 industry classification."""
+    industry_map: dict[str, str] = {}
+    ind = ak.sw_index_first_info()
+    for _, row in ind.iterrows():
+        code = str(row["行业代码"])
+        name = str(row["行业名称"])
+        try:
+            cons = ak.sw_index_third_cons(symbol=code)
+            for _, c in cons.iterrows():
+                ticker = str(c["股票代码"]).zfill(6)
+                if ticker not in industry_map:
+                    industry_map[ticker] = name
+        except Exception:
+            pass
+    return industry_map
+
+
+def _build_industry_map() -> dict[str, str]:
+    """Build ticker -> industry mapping. Try EM first, fallback to Shenwan."""
+    import akshare as ak
+    try:
+        m = _build_industry_map_em(ak)
+        if len(m) > 1000:
+            logger.info("Industry map (EM): %d tickers", len(m))
+            return m
+        logger.warning("EM industry map too small (%d), trying Shenwan...", len(m))
+    except Exception:
+        logger.warning("EM industry map failed, trying Shenwan...")
+    try:
+        m = _build_industry_map_sw(ak)
+        logger.info("Industry map (Shenwan): %d tickers", len(m))
+        return m
+    except Exception:
+        logger.warning("All industry map sources failed")
+        return {}
+
+
+def _fetch_spot_universe(ak: Any, top_n: int) -> pd.DataFrame | None:
+    """Primary: eastmoney push2 real-time spot (代码+名称+总市值)."""
+    try:
+        df = ak.stock_zh_a_spot_em()
+        df = df[pd.notna(df["总市值"]) & (df["总市值"] > 0)]
+        df = df.sort_values("总市值", ascending=False).head(top_n * 2)
+        logger.info("[universe] spot_em OK: %d stocks (push2.eastmoney.com)", len(df))
+        return df.rename(columns={"代码": "ticker", "名称": "name", "总市值": "market_cap"})
+    except Exception as e:
+        logger.warning("[universe] spot_em failed: %s", e)
+        return None
+
+
+def _fetch_gdhs_universe(ak: Any, top_n: int) -> pd.DataFrame | None:
+    """Fallback 1: eastmoney datacenter 股东户数 (代码+名称+总市值)."""
+    try:
+        df = ak.stock_zh_a_gdhs(symbol="最新")
+        df = df[pd.notna(df["总市值"]) & (df["总市值"] > 0)]
+        df = df.sort_values("总市值", ascending=False).head(top_n * 2)
+        logger.info("[universe] gdhs OK: %d stocks (datacenter-web.eastmoney.com)", len(df))
+        return df.rename(columns={"代码": "ticker", "名称": "name", "总市值": "market_cap"})
+    except Exception as e:
+        logger.warning("[universe] gdhs failed: %s", e)
+        return None
+
+
+def _fetch_index_universe(ak: Any, top_n: int) -> pd.DataFrame | None:
+    """Fallback 2: CSI 300 + CSI 500 index constituents (无市值)."""
+    try:
+        frames = []
+        for symbol, label in [("000300", "CSI300"), ("000905", "CSI500")]:
+            df = ak.index_stock_cons_csindex(symbol=symbol)
+            df = df.rename(columns={"成分券代码": "ticker", "成分券名称": "name"})
+            df["_index"] = label
+            frames.append(df[["ticker", "name", "_index"]])
+        combined = pd.concat(frames).drop_duplicates(subset=["ticker"])
+        logger.info("[universe] CSI index OK: %d stocks (csindex.com.cn)", len(combined))
+        return combined
+    except Exception as e:
+        logger.warning("[universe] CSI index failed: %s", e)
+        return None
+
+
 def build_top_universe(top_n: int) -> list[dict[str, Any]]:
-    """Fetch top A-shares by market cap with exclusions applied."""
+    """Fetch top A-shares by market cap with exclusions applied.
+
+    Fallback chain (3 sources, 2 different backends):
+      1. stock_zh_a_spot_em  — push2.eastmoney.com  (全量+市值)
+      2. stock_zh_a_gdhs     — datacenter-web.eastmoney.com (全量+市值)
+      3. index_stock_cons_csindex — csindex.com.cn (CSI300+500, 无市值)
+    """
     import akshare as ak
 
-    # 1. All A-shares with market cap
-    logger.info("Fetching all A-share stocks...")
-    df = ak.stock_zh_a_spot_em()
-    logger.info("Total A-shares from spot data: %d", len(df))
+    logger.info("Fetching A-share universe (3-source fallback)...")
+    df = _fetch_spot_universe(ak, top_n)
+    source = "spot_em"
+    if df is None:
+        df = _fetch_gdhs_universe(ak, top_n)
+        source = "gdhs"
+    if df is None:
+        df = _fetch_index_universe(ak, top_n)
+        source = "csi_index"
+    if df is None:
+        raise RuntimeError("All 3 universe sources failed")
 
-    df = df[pd.notna(df["总市值"]) & (df["总市值"] > 0)]
-    df = df.sort_values("总市值", ascending=False)
+    df["ticker"] = df["ticker"].astype(str)
 
     # 2. Industry map (bulk)
     industry_map = _build_industry_map()
@@ -146,9 +233,9 @@ def build_top_universe(top_n: int) -> list[dict[str, Any]]:
     excluded_st = 0
     excluded_fin = 0
     for _, row in df.iterrows():
-        ticker = str(row["代码"])
-        name = str(row["名称"])
-        market_cap = float(row["总市值"])
+        ticker = str(row["ticker"])
+        name = str(row["name"])
+        market_cap = float(row["market_cap"]) if "market_cap" in row and pd.notna(row.get("market_cap")) else 0
 
         if re.match(r"^[\*]?ST", name):
             excluded_st += 1
@@ -168,11 +255,8 @@ def build_top_universe(top_n: int) -> list[dict[str, Any]]:
             break
 
     logger.info(
-        "Universe: %d stocks (excluded: %d ST, %d financial) | "
-        "largest: %s %.0f亿 | smallest: %s %.0f亿",
-        len(stocks), excluded_st, excluded_fin,
-        stocks[0]["name"], stocks[0]["market_cap"] / 1e8,
-        stocks[-1]["name"], stocks[-1]["market_cap"] / 1e8,
+        "Universe: %d stocks via %s (excluded: %d ST, %d financial)",
+        len(stocks), source, excluded_st, excluded_fin,
     )
     return stocks
 

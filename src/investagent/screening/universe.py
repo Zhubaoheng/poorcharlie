@@ -40,39 +40,63 @@ def _fetch_a_share_list() -> list[dict[str, Any]]:
     return stocks
 
 
-def _enrich_industry(stocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Add Shenwan industry classification to each stock."""
+def _build_industry_map_bulk() -> dict[str, str]:
+    """Build ticker->industry map in bulk. Fallback chain:
+
+    1. stock_board_industry_cons_em (东财板块, push2.eastmoney.com)
+    2. sw_index_third_cons (申万一级, legulegu.com)
+    """
     import akshare as ak
 
+    # Try eastmoney boards first
     try:
-        df = ak.stock_board_industry_name_em()
-        # Build a mapping from individual stocks to their industry
         industry_map: dict[str, str] = {}
-        for _, row in df.iterrows():
+        boards = ak.stock_board_industry_name_em()
+        for _, row in boards.iterrows():
             board_name = str(row.get("板块名称", ""))
-            board_code = str(row.get("板块代码", ""))
-            # Store board info for later use
-            industry_map[board_code] = board_name
-    except Exception:
-        logger.warning("Failed to fetch industry data, skipping enrichment")
-        return stocks
-
-    # Use individual stock industry assignment
-    try:
-        # Get Shenwan level-1 industry for each stock
-        for stock in stocks:
-            ticker = stock["ticker"]
             try:
-                df_ind = ak.stock_individual_info_em(symbol=ticker)
-                for _, row in df_ind.iterrows():
-                    if str(row.get("item", "")) == "行业":
-                        stock["industry"] = str(row.get("value", ""))
-                        break
+                cons = ak.stock_board_industry_cons_em(symbol=board_name)
+                for _, cr in cons.iterrows():
+                    ticker = str(cr["代码"])
+                    if ticker not in industry_map:
+                        industry_map[ticker] = board_name
             except Exception:
                 pass
+        if len(industry_map) > 1000:
+            logger.info("Industry map (EM boards): %d tickers", len(industry_map))
+            return industry_map
     except Exception:
-        logger.warning("Failed to enrich individual industries")
+        pass
+    logger.warning("EM industry map failed or incomplete, trying Shenwan...")
 
+    # Fallback: Shenwan L1
+    try:
+        industry_map = {}
+        ind = ak.sw_index_first_info()
+        for _, row in ind.iterrows():
+            code = str(row["行业代码"])
+            name = str(row["行业名称"])
+            try:
+                cons = ak.sw_index_third_cons(symbol=code)
+                for _, cr in cons.iterrows():
+                    ticker = str(cr["股票代码"]).zfill(6)
+                    if ticker not in industry_map:
+                        industry_map[ticker] = name
+            except Exception:
+                pass
+        logger.info("Industry map (Shenwan): %d tickers", len(industry_map))
+        return industry_map
+    except Exception:
+        logger.warning("All industry map sources failed")
+        return {}
+
+
+def _enrich_industry(stocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Add industry classification to each stock (bulk, not per-stock)."""
+    industry_map = _build_industry_map_bulk()
+    for stock in stocks:
+        if not stock.get("industry"):
+            stock["industry"] = industry_map.get(stock["ticker"], "")
     return stocks
 
 
