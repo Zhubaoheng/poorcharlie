@@ -70,6 +70,14 @@ async def run_pipeline(
         )
     ctx = PipelineContext(intake)
 
+    # Backtest mode: use historical data when as_of_date is set
+    if intake.as_of_date and market_fetcher is None:
+        from investagent.datasources.historical_market_data import HistoricalMarketDataFetcher
+        market_fetcher = HistoricalMarketDataFetcher(
+            as_of_date=intake.as_of_date,
+            exchange=intake.exchange,
+        )
+
     # Stage 1: Info Capture (with datasource integration)
     info_agent = InfoCaptureAgent(
         llm,

@@ -127,9 +127,12 @@ class InfoCaptureAgent(BaseAgent):
                 logger.warning("No fetcher for exchange %s", intake.exchange)
                 return []
 
-        now = datetime.now()
-        start_year = now.year - _DEFAULT_LOOKBACK_YEARS
-        end_year = now.year
+        # Use as_of_date for backtest mode, otherwise current date
+        ref_date = intake.as_of_date or datetime.now().date()
+        if isinstance(ref_date, datetime):
+            ref_date = ref_date.date()
+        start_year = ref_date.year - _DEFAULT_LOOKBACK_YEARS
+        end_year = ref_date.year
 
         try:
             docs = await fetcher.search_filings(
@@ -137,6 +140,15 @@ class InfoCaptureAgent(BaseAgent):
                 start_year=start_year,
                 end_year=end_year,
             )
+            # Backtest: exclude filings published AFTER as_of_date
+            if intake.as_of_date:
+                before = [d for d in docs if d.filing_date <= intake.as_of_date]
+                if len(before) < len(docs):
+                    logger.info(
+                        "Backtest filter: %d/%d filings before %s",
+                        len(before), len(docs), intake.as_of_date,
+                    )
+                docs = before
             logger.info(
                 "Fetched %d filings for %s from %s",
                 len(docs), intake.ticker, fetcher.market,
@@ -149,23 +161,28 @@ class InfoCaptureAgent(BaseAgent):
             return []
 
     async def _fetch_market_data(self, intake: CompanyIntake) -> MarketQuote | None:
-        """Fetch current market data snapshot."""
+        """Fetch market data snapshot (real-time or historical for backtest)."""
         fetcher = self._market_fetcher
         if fetcher is None:
             fetcher = resolve_market_data_fetcher()
 
-        yf_ticker = to_yfinance_ticker(intake.ticker, intake.exchange)
+        # Historical fetcher uses raw ticker; yfinance needs formatted ticker
+        from investagent.datasources.historical_market_data import HistoricalMarketDataFetcher
+        if isinstance(fetcher, HistoricalMarketDataFetcher):
+            ticker_for_fetch = intake.ticker
+        else:
+            ticker_for_fetch = to_yfinance_ticker(intake.ticker, intake.exchange)
 
         try:
-            quote = await fetcher.get_quote(yf_ticker)
+            quote = await fetcher.get_quote(ticker_for_fetch)
             logger.info(
                 "Market data for %s: price=%s, mcap=%s",
-                yf_ticker, quote.price, quote.market_cap,
+                ticker_for_fetch, quote.price, quote.market_cap,
             )
             return quote
         except Exception:
             logger.warning(
-                "Failed to fetch market data for %s", yf_ticker, exc_info=True,
+                "Failed to fetch market data for %s", ticker_for_fetch, exc_info=True,
             )
             return None
 

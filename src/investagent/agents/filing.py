@@ -466,9 +466,22 @@ class FilingAgent(BaseAgent):
         ak_bs = [BalanceSheetRow(**row) for row in data.get("balance_sheet", [])]
         ak_cf = [CashFlowRow(**row) for row in data.get("cash_flow", [])]
 
+        # Backtest mode: exclude financial data for years after as_of_date.
+        # Annual reports for fiscal year Y are typically published by April Y+1.
+        # So at as_of_date, we can see fiscal year (as_of_date.year - 1) at most.
+        if intake.as_of_date:
+            max_fy = str(intake.as_of_date.year - 1)
+            # Exception: if as_of_date is after April, the current year's annual
+            # report is likely published. But safer to use year-1 as cutoff.
+            ak_is = [r for r in ak_is if r.fiscal_year <= max_fy]
+            ak_bs = [r for r in ak_bs if r.fiscal_year <= max_fy]
+            ak_cf = [r for r in ak_cf if r.fiscal_year <= max_fy]
+            logger.info(
+                "Backtest filter: fiscal_year <= %s → IS=%d BS=%d CF=%d rows",
+                max_fy, len(ak_is), len(ak_bs), len(ak_cf),
+            )
+
         # AkShare is source of truth — REPLACE, don't merge.
-        # LLM extraction is non-deterministic (different runs produce
-        # different years/values). AkShare is deterministic and authoritative.
         new_is = ak_is if ak_is else list(output.income_statement)
         new_bs = ak_bs if ak_bs else list(output.balance_sheet)
         new_cf = ak_cf if ak_cf else list(output.cash_flow)
