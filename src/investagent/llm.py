@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from typing import Any
 
 import anthropic
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 class LLMClient:
@@ -68,4 +72,15 @@ class LLMClient:
         # Provider-specific parameters (e.g., MiniMax context_window, effort)
         if self._extra_body:
             kwargs["extra_body"] = self._extra_body
-        return await self._client.messages.create(**kwargs)
+        # Retry with backoff on rate limit (429)
+        max_attempts = 5
+        for attempt in range(max_attempts):
+            try:
+                return await self._client.messages.create(**kwargs)
+            except anthropic.RateLimitError:
+                if attempt == max_attempts - 1:
+                    raise
+                wait = 10 * (attempt + 1)  # 10s, 20s, 30s, 40s
+                logger.warning("Rate limit 429, waiting %ds (attempt %d/%d)", wait, attempt + 1, max_attempts)
+                await asyncio.sleep(wait)
+        raise RuntimeError("Unreachable")
