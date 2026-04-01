@@ -120,11 +120,11 @@ class DebtInstrument(BaseModel, frozen=True):
 
 
 class CovenantStatus(BaseModel, frozen=True):
-    covenant_type: str
-    threshold: str
-    current_value: str
-    headroom: str
-    in_compliance: bool
+    covenant_type: str = ""
+    threshold: str = ""
+    current_value: str = ""
+    headroom: str = ""
+    in_compliance: bool = True
 
 
 # ---------------------------------------------------------------------------
@@ -134,9 +134,9 @@ class CovenantStatus(BaseModel, frozen=True):
 class SpecialItem(BaseModel, frozen=True):
     fiscal_year: str
     description: str
-    pre_tax_amount: float
-    classification: str  # "restructuring" | "litigation" | "impairment" | "asset_disposal" | "government_subsidy"
-    recurrence: str  # "first_time" | "recurring" | "multi_year"
+    pre_tax_amount: float | None = None
+    classification: str = ""  # "restructuring" | "litigation" | "impairment" | "asset_disposal" | "government_subsidy"
+    recurrence: str = ""  # "first_time" | "recurring" | "multi_year"
 
 
 # ---------------------------------------------------------------------------
@@ -202,31 +202,31 @@ class FilingOutput(BaseAgentOutput):
     filing_meta: FilingMeta
 
     # 强类型财务表格
-    income_statement: list[IncomeStatementRow]
-    balance_sheet: list[BalanceSheetRow]
-    cash_flow: list[CashFlowRow]
-    segments: list[SegmentRow]
+    income_statement: list[IncomeStatementRow] = []
+    balance_sheet: list[BalanceSheetRow] = []
+    cash_flow: list[CashFlowRow] = []
+    segments: list[SegmentRow] = []
 
     # 会计政策（保留原文）
-    accounting_policies: list[AccountingPolicyEntry]
+    accounting_policies: list[AccountingPolicyEntry] = []
 
     # 债务结构
-    debt_schedule: list[DebtInstrument]
-    covenant_status: list[CovenantStatus]
+    debt_schedule: list[DebtInstrument] = []
+    covenant_status: list[CovenantStatus] = []
 
     # 非经常性损益
-    special_items: list[SpecialItem]
+    special_items: list[SpecialItem] = []
 
     # 集中度
     concentration: ConcentrationData | None = None
 
     # 资本配置
-    buyback_history: list[BuybackRecord]
-    acquisition_history: list[AcquisitionRecord]
-    dividend_per_share_history: list[dict[str, float | str | None]]
+    buyback_history: list[BuybackRecord] = []
+    acquisition_history: list[AcquisitionRecord] = []
+    dividend_per_share_history: list[dict[str, float | str | None]] = []
 
     # 关键脚注原文
-    footnote_extracts: list[FootnoteExtract]
+    footnote_extracts: list[FootnoteExtract] = []
 
     # 风险因素
-    risk_factors: list[RiskFactorEntry]
+    risk_factors: list[RiskFactorEntry] = []
