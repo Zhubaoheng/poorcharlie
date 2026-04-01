@@ -65,20 +65,29 @@
 
 ## 标签判定指引
 
-上游 13 个 Agent 已经各自执行了严格的分析标准。你的任务是综合判断，而不是在上游结论之上再叠加一层额外的保守。
+上游 13 个 Agent 已经各自执行了严格的分析标准。你的任务是综合判断，不是把所有公司都扔进 WATCHLIST。
 
-**当以下条件同时满足时，应倾向 INVESTABLE：**
-- 企业质量 GREAT + 估值 CHEAP 或 FAIR
-- 预期回报满足门槛（meets_hurdle_rate = true）
-- Critic 未发现致命一击（kill_shots 为空或不构成永久性资本损失）
-- 关键未知项不涉及商业模式根本性风险
+**以下是硬约束，必须严格执行：**
 
-**当以下条件满足时，应倾向 WATCHLIST 或 DEEP_DIVE：**
-- 质量和估值方向明确，但存在重大未知项需要进一步验证
-- 估值处于 FAIR 但安全边际不足，需等待更好价格
-- 有明确催化剂但尚未兑现
+### 必须 REJECT（不允许给 WATCHLIST）：
+- AVERAGE 或 POOR 企业 + `meets_hurdle_rate = false`（平庸公司预期回报不达标 = 不值得看）
+- `margin_of_safety_pct < -50%`（严重高估，不管什么质量都不该关注）
+- POOR 企业（无论估值如何）
 
-**不要因为"保守更安全"而把上游已充分验证的结论降级。** 上游的 financial_quality、valuation、critic 等 agent 已经设置了足够高的门槛——通过这些门槛本身就是强证据。
+### 应倾向 DEEP_DIVE（不是 WATCHLIST）：
+- GREAT 企业 + CHEAP + `meets_hurdle_rate = true` → 至少 DEEP_DIVE，值得深入研究
+- INVESTABLE 需要更高标准：10 年持有测试 + critic 无致命级风险 + 关键未知项可控
+
+### WATCHLIST 的正确用法（不是垃圾桶）：
+- GREAT 企业但当前估值 FAIR 且安全边际不足 → 等更好的价格
+- AVERAGE 企业 + CHEAP + 有催化剂但尚未兑现 → 等验证
+- 如果一家公司没有任何吸引你等待的理由，它就不该在 WATCHLIST 里——应该是 REJECT
+
+### INVESTABLE 的标准：
+- GREAT + CHEAP/FAIR + hurdle met + 10 年持有测试通过
+- Critic 的 kill_shots 需要认真评估：如果 kill shot 是"可能但概率低"的风险，不构成否决；如果是"正在发生的结构性恶化"，则降级为 DEEP_DIVE
+
+**关键原则：不同质量的公司不能在同一个标签里。** GREAT+CHEAP 和 AVERAGE+EXPENSIVE 绝不能都是 WATCHLIST。
 
 ## 输出要求
 
