@@ -430,8 +430,26 @@ _MAX_TOTAL_CHARS = 200_000
 # PDF → Markdown
 # ---------------------------------------------------------------------------
 
-def extract_pdf_markdown(raw_content: bytes) -> str:
+def _extract_page_range(raw_content: bytes, pages: list[int]) -> str:
+    """Extract markdown for a subset of pages (runs in a worker process)."""
+    import pymupdf
+    import pymupdf4llm
+
+    doc = pymupdf.open(stream=raw_content, filetype="pdf")
+    md = pymupdf4llm.to_markdown(doc, pages=pages)
+    doc.close()
+    return md
+
+
+def extract_pdf_markdown(raw_content: bytes, max_workers: int = 4) -> str:
     """Convert PDF bytes to markdown text using pymupdf4llm.
+
+    Parallelizes OCR across CPU cores by splitting pages into chunks
+    and processing each chunk in a separate process (bypasses GIL).
+
+    Args:
+        raw_content: Raw PDF bytes.
+        max_workers: Number of parallel processes for OCR.
 
     Returns empty string if extraction fails.
     """
@@ -440,9 +458,44 @@ def extract_pdf_markdown(raw_content: bytes) -> str:
         import pymupdf4llm
 
         doc = pymupdf.open(stream=raw_content, filetype="pdf")
-        md = pymupdf4llm.to_markdown(doc)
+        n_pages = len(doc)
         doc.close()
-        return md
+
+        # Small PDFs: single-threaded is fine
+        if n_pages <= 10 or max_workers <= 1:
+            doc = pymupdf.open(stream=raw_content, filetype="pdf")
+            md = pymupdf4llm.to_markdown(doc)
+            doc.close()
+            return md
+
+        # Split pages into chunks for parallel processing
+        import os
+        workers = min(max_workers, os.cpu_count() or 4, n_pages)
+        chunk_size = (n_pages + workers - 1) // workers
+        page_chunks = []
+        for i in range(0, n_pages, chunk_size):
+            page_chunks.append(list(range(i, min(i + chunk_size, n_pages))))
+
+        # Process chunks in parallel (ProcessPoolExecutor bypasses GIL)
+        from concurrent.futures import ProcessPoolExecutor, as_completed
+
+        results: dict[int, str] = {}
+        with ProcessPoolExecutor(max_workers=workers) as pool:
+            futures = {
+                pool.submit(_extract_page_range, raw_content, chunk): idx
+                for idx, chunk in enumerate(page_chunks)
+            }
+            for future in as_completed(futures):
+                idx = futures[future]
+                try:
+                    results[idx] = future.result()
+                except Exception:
+                    logger.debug("Page chunk %d failed", idx, exc_info=True)
+                    results[idx] = ""
+
+        # Reassemble in order
+        return "\n".join(results[i] for i in range(len(page_chunks)))
+
     except Exception:
         logger.warning("PDF markdown extraction failed", exc_info=True)
         return ""
