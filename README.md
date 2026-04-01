@@ -1,178 +1,171 @@
 # InvestAgent
 
-芒格式价值投资多 Agent 分析系统。自动抓取财报、结构化提取、10 个维度评估，给出 REJECT / TOO_HARD / WATCHLIST / DEEP_DIVE / INVESTABLE 结论。
+芒格式价值投资多 Agent 分析系统。14 个专业 Agent 协作，覆盖财务质量、估值、竞争护城河、管理层心理学、系统脆弱性分析。
 
 **不是股价预测工具。** 只判断一家公司是否值得深入研究、公开信息能否支撑分析、风险回报是否达标。
 
-## 快速开始
-
-### 1. 环境
+## Quick Start
 
 ```bash
-# Python 3.12+，推荐用 uv
 git clone https://github.com/Zhubaoheng/investagent.git
 cd investagent
+
+# 安装依赖（uv 自动管理 Python 3.12）
+curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
 
-# 安装浏览器（Scrapling 爬取港交所/巨潮需要）
-uv run scrapling install
+# 系统依赖：Tesseract OCR（年报 PDF 解析）
+# macOS:
+brew install tesseract
+# Ubuntu/Debian:
+sudo apt install tesseract-ocr
+
+# Playwright 浏览器（巨潮资讯网抓取）
+uv run playwright install
+
+# 配置 API Key
+cp .env.example .env
+# 编辑 .env，填入 MINIMAX_API_KEY
 ```
 
-### 2. 配置 API Key
+## 使用方式
 
-选一个 LLM provider：
+### 分析单只公司
 
-**MiniMax（推荐，中文财报分析效果好）：**
+```python
+import asyncio
+from investagent.config import create_llm_client
+from investagent.schemas.company import CompanyIntake
+from investagent.workflow.orchestrator import run_pipeline
+
+llm = create_llm_client("minimax", extra_body={"context_window_size": 200000, "effort": "high"})
+intake = CompanyIntake(ticker="600519", name="贵州茅台", exchange="SSE", sector="食品饮料")
+ctx = asyncio.run(run_pipeline(intake, llm=llm))
+
+committee = ctx.get_result("committee")
+print(f"{committee.final_label} ({committee.confidence})")
+print(committee.thesis)
+```
+
+### 回测模式（历史数据）
+
+```python
+from datetime import date
+
+# as_of_date 自动切换：历史股价 + 过滤未来财报 + 截断未来三表数据
+intake = CompanyIntake(
+    ticker="600519", name="贵州茅台", exchange="SSE",
+    as_of_date=date(2023, 11, 1),  # 用 2023.11 股价，FY<=2022 数据
+)
+ctx = asyncio.run(run_pipeline(intake, llm=llm))
+```
+
+### 批量评估（Top 500 A 股）
+
 ```bash
-export INVESTAGENT_PROVIDER=minimax
-export MINIMAX_API_KEY=sk-xxx
+# 当前状态评估
+uv run python scripts/run_overnight.py --top 500 --pipeline-concurrency 5
+
+# 从 2023 年 11 月开始回测
+uv run python scripts/run_overnight.py \
+  --top 500 \
+  --as-of-date 2023-11-01 \
+  --pipeline-concurrency 5 \
+  --screening-concurrency 30
 ```
 
-**Claude：**
+### 运行测试
+
 ```bash
-export INVESTAGENT_PROVIDER=claude
-export ANTHROPIC_API_KEY=sk-ant-xxx
+uv run python -m pytest tests/ -q
 ```
 
-> MiniMax 默认用 `MiniMax-M2.7-highspeed`，200K 上下文。Claude 默认用 `claude-sonnet-4-20250514`。可通过 `INVESTAGENT_MODEL` 环境变量覆盖。
+## Pipeline 架构
 
-### 3. 运行分析
+```
+股票池（市值 Top N）
+  → 规则排除（ST、金融类）
+  → 量化预过滤（连续亏损、低 ROE/ROIC、营收萎缩）
+  → LLM 筛选（能力圈判断 + 质量信号识别）
+  → 14-Agent 完整 Pipeline：
+      1. Info Capture（财报 + 行情数据获取）
+      2. Filing Structuring（PDF → 结构化，AkShare 三表替换）
+      3. Triage Gate（可分析性检查）
+      4. 并行：Accounting Risk + Financial Quality + Net Cash
+              + Valuation + Moat + Compounding + Psychology
+              + Systems + Ecology
+      5. Gates：accounting_risk + financial_quality（仅拦 POOR）
+      6. Critic（魔鬼代言人）
+      7. Investment Committee（最终裁决）
+  → Portfolio Construction
+```
+
+## 代理配置（可选）
+
+AkShare 从东财/同花顺/新浪抓取数据，限速严格。如果你有 Clash Verge（或 mihomo），系统可以自动轮换代理节点绕过限速。
+
+### 工作原理
+
+- **选择性代理**：只有 AkShare 相关域名走代理（eastmoney, 10jqka, sina, legulegu, csindex）
+- MiniMax API、yfinance、巨潮等走直连（无代理依赖）
+- 每 20 只股票自动轮换一次代理节点
+- Clash 不可用时自动降级为直连
+
+### 配置方法
+
+在 `.env` 中添加：
 
 ```bash
-# 港股
-investagent 1448.HK --name 福寿园 --sector 殡葬服务
+# Clash unix socket 路径
+#   macOS Clash Verge: /var/tmp/verge/verge-mihomo.sock
+#   Linux mihomo:      查看 mihomo 配置中的 external-controller-unix
+CLASH_SOCKET=/var/tmp/verge/verge-mihomo.sock
 
-# A 股
-investagent 600519.SH --name 贵州茅台
+# Clash HTTP 代理端口（clash 配置中的 mixed-port）
+CLASH_PROXY=http://127.0.0.1:7890
 
-# 美股
-investagent BABA
-
-# 更多选项
-investagent --help
+# 代理组名称（包含你的节点的 Selector/URLTest 组）
+CLASH_GROUP=你的代理组名称
 ```
 
-代码自动识别交易所：`.HK` → 港交所、`.SH` → 上交所、`.SZ` → 深交所、纯字母 → 美股、4-5 位数字 → 港股。
+### 查找你的代理组名称
 
-### 4. 输出
+```bash
+# macOS Clash Verge:
+curl -s --unix-socket /var/tmp/verge/verge-mihomo.sock http://localhost/proxies | \
+  python3 -c "
+import sys, json
+data = json.load(sys.stdin)['proxies']
+for k, v in data.items():
+    if v.get('type') in ('Selector', 'URLTest', 'LoadBalance'):
+        print(f'{v[\"type\"]:12s} {k}: {len(v.get(\"all\",[]))} nodes')
+"
 
-每次运行生成两个文件到 `output/` 目录：
-
-```
-output/
-  1448_20260327_120801.md          ← Markdown 报告（人类可读）
-  1448_20260327_120801_debug.json  ← JSON 完整日志（每个 Agent 的输入输出）
-```
-
-`--output-dir` 可指定输出目录。
-
----
-
-## Pipeline
-
-```
-CompanyIntake
-    │
-    ├─→ [1] InfoCapture    真实数据抓取（HKEX/cninfo/EDGAR + yfinance）
-    ├─→ [2] Filing         下载 PDF → pymupdf4llm 提取 → LLM 结构化
-    ├─→ [3] Triage         基于真实数据评估可解释性 ──→ REJECT 则停止
-    ├─→ [4] AccountingRisk 会计风险 10 项检查 ──→ RED 则停止
-    ├─→ [5] FinancialQuality 六维财务质量评分 ──→ FAIL 则停止
-    ├─→ [6] NetCash        净现金 / 市值分析
-    ├─→ [7] Valuation      三情景回报估算 vs 10% 门槛
-    ├─→ [8] MentalModels   护城河 / 复利 / 心理学 / 系统韧性 / 生态（并行）
-    ├─→ [9] Critic         纯对抗：kill shots + 永久损失风险
-    └─→ [10] Committee     最终结论：REJECT / TOO_HARD / WATCHLIST / INVESTABLE
+# Linux mihomo（TCP controller）:
+# 把 --unix-socket 换成 http://127.0.0.1:9090/proxies
 ```
 
-14 个 Agent，3 道门控。详细架构文档见 [docs/pipeline.md](docs/pipeline.md)。
+### 不用 Clash
 
----
+不配置 Clash 也能跑——只是 AkShare 数据获取会慢一些（被限速暂停）。所有数据有 checkpoint 缓存，断点续跑不丢进度。
 
-## 支持的市场
+## 数据源与 Fallback
 
-| 市场 | 交易所 | 财报来源 | 报告类型 |
-|------|--------|---------|---------|
-| A 股 | SSE / SZSE | cninfo.com.cn | 年报、半年报 |
-| 港股 | HKEX | hkexnews.hk | Annual Report、Interim Report |
-| 美股中概 | NYSE / NASDAQ | SEC EDGAR | 20-F、6-K |
-
-市场行情统一通过 yfinance 获取（价格、市值、PE、PB、股息率）。
-
----
+| 数据 | 主接口 | 后端 | Fallback 1 | Fallback 2 |
+|------|--------|------|-----------|-----------|
+| 股票池+市值 | `stock_zh_a_spot_em` | eastmoney push2 | `stock_zh_a_gdhs` (datacenter) | CSI 300+500 (csindex) |
+| 行业分类 | `sw_index_third_cons` | legulegu | `stock_board_industry_cons_em` (eastmoney) | — |
+| A 股三表 | `stock_financial_*_ths` | 同花顺 | — | — |
+| 历史股价 | `stock_zh_a_hist` | eastmoney push2his | `stock_zh_a_daily` (sina) | — |
+| A 股年报 | cninfo.com.cn | 巨潮 | — | — |
+| 实时行情 | yfinance | Yahoo Finance | — | — |
 
 ## 环境变量
 
-| 变量 | 必须 | 默认值 | 说明 |
-|------|------|--------|------|
-| `INVESTAGENT_PROVIDER` | 否 | `claude` | `claude` 或 `minimax` |
-| `INVESTAGENT_MODEL` | 否 | 按 provider | 覆盖模型名 |
-| `ANTHROPIC_API_KEY` | Claude 时 | — | Claude API 密钥 |
-| `MINIMAX_API_KEY` | MiniMax 时 | — | MiniMax API 密钥 |
-| `MINIMAX_BASE_URL` | 否 | `https://api.minimaxi.com/anthropic` | MiniMax 端点 |
-
----
-
-## 开发
-
-```bash
-# 安装开发依赖
-uv sync --group dev
-
-# 运行测试
-uv run pytest -v
-
-# 单独测试某个模块
-uv run pytest tests/unit/agents/test_filing.py -v
-uv run pytest tests/unit/datasources/ -v
-```
-
-### 项目结构
-
-```
-src/investagent/
-├── agents/              # 14 个 Agent 实现
-│   ├── base.py          # BaseAgent（retry + JSON 修复）
-│   ├── info_capture.py  # 混合 Agent：真实数据 + LLM
-│   ├── filing.py        # 混合 Agent：PDF 提取 + LLM 结构化
-│   ├── triage.py        # 基于真实数据的初筛
-│   ├── context_helpers.py # 上下文序列化（Agent 间数据传递）
-│   └── ...
-├── datasources/         # 数据源层
-│   ├── base.py          # FilingFetcher / MarketDataFetcher 抽象
-│   ├── hkex.py          # 港交所爬虫（Scrapling）
-│   ├── cninfo.py        # 巨潮资讯网爬虫（Scrapling）
-│   ├── edgar.py         # SEC EDGAR（edgartools）
-│   ├── market_data.py   # yfinance
-│   ├── pdf_extract.py   # PDF → markdown → 章节分割
-│   └── resolver.py      # 交易所 → fetcher 路由
-├── schemas/             # Pydantic 输出 schema
-├── prompts/             # Jinja2 prompt 模板
-├── workflow/            # Pipeline 编排
-│   ├── orchestrator.py  # 10 阶段流水线
-│   ├── context.py       # PipelineContext 数据总线
-│   ├── gates.py         # 门控逻辑
-│   └── runner.py        # Agent 执行器
-├── report.py            # Markdown 报告 + JSON debug log 生成
-├── cli.py               # CLI 入口
-├── config.py            # 配置（provider / model / 阈值）
-└── llm.py               # LLM 客户端（Anthropic 兼容）
-
-tests/
-├── unit/                # 212 个单元测试
-└── integration/         # Pipeline 集成测试
-```
-
----
-
-## 示例输出
-
-福寿园 (1448.HK) 分析：14 Agent，157K tokens，907 秒 → **REJECT**
-
-核心发现（基于 2024 年报 PDF 真实数据）：
-- 收入 20.77 亿（同比 -21%），净利润 4.97 亿（同比 -49%）
-- 分红 7.36 亿 > 净利润（派息率 197%，Critic 称为"庞氏分红"）
-- 基准回报 6.8% < 10% 门槛
-- Kill shot：监管政策转向 + 分红掏空资产负债表
-
-完整报告见 [output/1448_20260327_120801.md](output/1448_20260327_120801.md)。
+| 变量 | 必需 | 说明 |
+|------|:----:|------|
+| `MINIMAX_API_KEY` | 是 | MiniMax LLM API Key |
+| `DEEPSEEK_API_KEY` | 否 | DeepSeek R1 Key（时间隔离回测用） |
+| `CLASH_SOCKET` | 否 | Clash unix socket 路径 |
+| `CLASH_PROXY` | 否 | Clash HTTP 代理 URL |
+| `CLASH_GROUP` | 否 | Clash 代理组名称（节点轮换用） |
