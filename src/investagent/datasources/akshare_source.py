@@ -16,6 +16,12 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# Global semaphore: py_mini_racer (V8 engine used by AkShare/同花顺) is NOT
+# thread-safe. Concurrent asyncio.to_thread() calls crash with
+# "FATAL:address_pool_manager.cc Check failed: !pool->IsInitialized()".
+# Serialize all AkShare calls to prevent V8 multi-thread initialization.
+_AKSHARE_LOCK = asyncio.Semaphore(1)
+
 
 def _parse_cn_number(val: Any) -> float | None:
     """Parse Chinese financial number strings like '893.35亿', '137.89亿', '68.64'."""
@@ -338,11 +344,13 @@ async def fetch_structured_financials(
 ) -> dict[str, Any]:
     """Async wrapper: fetch structured financials from AkShare.
 
+    Serialized via _AKSHARE_LOCK — py_mini_racer (V8) is not thread-safe.
     Returns empty dict if market not supported or API fails.
     """
-    if market == "A_SHARE":
-        return await asyncio.to_thread(fetch_a_share_financials, ticker, years)
-    elif market == "HK":
-        return await asyncio.to_thread(fetch_hk_financials, ticker, years)
+    async with _AKSHARE_LOCK:
+        if market == "A_SHARE":
+            return await asyncio.to_thread(fetch_a_share_financials, ticker, years)
+        elif market == "HK":
+            return await asyncio.to_thread(fetch_hk_financials, ticker, years)
     # US_ADR uses edgartools XBRL (handled separately)
     return {}

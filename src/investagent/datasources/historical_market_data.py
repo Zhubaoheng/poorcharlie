@@ -158,9 +158,11 @@ class HistoricalMarketDataFetcher(MarketDataFetcher):
         self._exchange = exchange
 
     async def get_quote(self, ticker: str) -> MarketQuote:
-        return await asyncio.to_thread(
-            _fetch_historical_quote_sync, ticker, self._exchange, self._as_of_date,
-        )
+        from investagent.datasources.akshare_source import _AKSHARE_LOCK
+        async with _AKSHARE_LOCK:
+            return await asyncio.to_thread(
+                _fetch_historical_quote_sync, ticker, self._exchange, self._as_of_date,
+            )
 
     async def get_quotes(self, tickers: list[str]) -> list[MarketQuote]:
         tasks = [self.get_quote(t) for t in tickers]
