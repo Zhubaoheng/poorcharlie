@@ -4,29 +4,30 @@
 
 **不是股价预测工具。** 只判断一家公司是否值得深入研究、公开信息能否支撑分析、风险回报是否达标。
 
-## Quick Start
+## 部署
 
 ```bash
 git clone https://github.com/Zhubaoheng/investagent.git
 cd investagent
 
-# 安装依赖（uv 自动管理 Python 3.12）
+# 1. 安装 uv + Python 依赖（自动创建 Python 3.12 虚拟环境）
 curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
 
-# 系统依赖：Tesseract OCR（年报 PDF 解析）
-# macOS:
-brew install tesseract
-# Ubuntu/Debian:
-sudo apt install tesseract-ocr
-
-# Playwright 浏览器（巨潮资讯网抓取）
+# 2. Playwright 浏览器（巨潮资讯网抓取用）
 uv run playwright install
 
-# 配置 API Key
-cp .env.example .env
-# 编辑 .env，填入 MINIMAX_API_KEY
+# 3. 配置 API Key
+echo "MINIMAX_API_KEY=sk-xxx" > .env
+# DeepSeek（回测时间隔离用，可选）：
+# echo "DEEPSEEK_API_KEY=sk-xxx" >> .env
+
+# 4. 验证
+uv run python -m pytest tests/ -q           # 275 tests
+uv run investagent 600519                     # 单股分析
 ```
+
+无需安装 Tesseract 或其他系统依赖——PDF 解析使用 pymupdf 原生文本提取（A 股/港股年报均为文本 PDF，不需要 OCR）。
 
 ## 使用方式
 
