@@ -69,38 +69,16 @@ def _post_process_committee(
     confidence = output.confidence
     original_label = label
 
-    # --- Hard REJECT rules ---
+    # --- Hard REJECT only (防呆) ---
+    # These are objective facts that don't require judgment.
+    # Upgrade decisions (WATCHLIST→DEEP_DIVE→INVESTABLE) stay with LLM
+    # because they require weighing critic analysis, unknowns, and context.
     if quality == "POOR":
         label = FinalLabel.REJECT
     elif mos is not None and mos < -50 and quality in ("AVERAGE", "POOR", ""):
         label = FinalLabel.REJECT
     elif quality == "AVERAGE" and hurdle is False:
         label = FinalLabel.REJECT
-
-    # --- Upgrade rules (only if not forced REJECT above) ---
-    if label != FinalLabel.REJECT:
-        min_label = None
-        if quality == "GREAT" and pvv == "CHEAP" and hurdle is True:
-            min_label = FinalLabel.DEEP_DIVE
-        elif quality == "GREAT" and pvv == "FAIR" and hurdle is True:
-            min_label = FinalLabel.DEEP_DIVE
-        elif quality == "AVERAGE" and pvv == "CHEAP" and hurdle is True:
-            min_label = FinalLabel.DEEP_DIVE
-
-        if min_label and _LABEL_RANK.get(label, 0) < _LABEL_RANK[min_label]:
-            label = min_label
-
-    # --- Confidence rules ---
-    if quality == "GREAT" and pvv == "CHEAP" and (mos or 0) > 30 and len(kill_shots) == 0:
-        confidence = "HIGH"
-    else:
-        # Check for data incompleteness
-        try:
-            filing = ctx.get_result("filing")
-            if not filing or not getattr(filing, "income_statement", None):
-                confidence = "LOW"
-        except (KeyError, AttributeError):
-            confidence = "LOW"
 
     if label != original_label:
         logger.info(
