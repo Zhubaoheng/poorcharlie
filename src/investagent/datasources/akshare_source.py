@@ -12,9 +12,27 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import time
 from typing import Any
 
+import requests.exceptions
+import urllib3.exceptions
+
 logger = logging.getLogger(__name__)
+
+# Retry config for transient AkShare errors (SSL EOF, proxy disconnect, etc.)
+_MAX_RETRIES = 3
+_RETRY_BASE_DELAY = 5  # seconds; actual delay = base * 2^attempt (5, 10, 20)
+_RETRYABLE_EXCEPTIONS = (
+    requests.exceptions.ConnectionError,
+    requests.exceptions.ProxyError,
+    requests.exceptions.SSLError,
+    requests.exceptions.Timeout,
+    urllib3.exceptions.MaxRetryError,
+    urllib3.exceptions.NewConnectionError,
+    ConnectionResetError,
+    OSError,
+)
 
 # Global semaphore: py_mini_racer (V8 engine used by AkShare/同花顺) is NOT
 # thread-safe. Concurrent asyncio.to_thread() calls crash with
@@ -22,11 +40,57 @@ logger = logging.getLogger(__name__)
 # Serialize all AkShare calls to prevent V8 multi-thread initialization.
 _AKSHARE_LOCK = asyncio.Semaphore(1)
 
-# Circuit breaker: after N consecutive failures, skip akshare entirely.
-# Prevents wasting ~20s per ticker on SSL/connection timeouts.
+# Circuit breaker: per-ticker tracking. After N consecutive tickers fail
+# (post-retry), pause for a cooldown period then retry. NOT global disable.
 _CONSECUTIVE_FAILURES = 0
-_CIRCUIT_BREAKER_THRESHOLD = 3
-_CIRCUIT_BROKEN = False
+_CIRCUIT_BREAKER_THRESHOLD = 5
+_CIRCUIT_COOLDOWN_UNTIL = 0.0  # timestamp; skip calls until this time
+_CIRCUIT_COOLDOWN_SECS = 300  # 5 minutes cooldown, then retry
+
+
+_ROTATOR_CACHE: Any = None  # lazily populated ClashRotator singleton
+
+
+def _try_rotate_proxy():
+    """Rotate Clash proxy node if rotator is available. Best-effort."""
+    global _ROTATOR_CACHE
+    try:
+        if _ROTATOR_CACHE is None:
+            from investagent.datasources.proxy_rotator import ClashRotator
+            r = ClashRotator()
+            _ROTATOR_CACHE = r if r.available else False
+        if _ROTATOR_CACHE:
+            node = _ROTATOR_CACHE.rotate()
+            if node:
+                logger.info("Rotated proxy to %s after transient error", node)
+    except Exception:
+        _ROTATOR_CACHE = False  # don't retry on import/init error
+
+
+def _akshare_call_with_retry(func, *args, label: str = ""):
+    """Call an AkShare API function with exponential backoff retry on transient errors.
+
+    On proxy/connection errors, also rotates the Clash proxy node before retrying
+    so we don't keep hitting a dead node.
+    """
+    last_exc = None
+    for attempt in range(_MAX_RETRIES):
+        try:
+            return func(*args)
+        except _RETRYABLE_EXCEPTIONS as exc:
+            last_exc = exc
+            delay = _RETRY_BASE_DELAY * (2 ** attempt)
+            logger.warning(
+                "AkShare %s transient error (attempt %d/%d), retrying in %ds: %s",
+                label, attempt + 1, _MAX_RETRIES, delay, type(exc).__name__,
+            )
+            # Rotate proxy node so retry uses a different exit IP
+            _try_rotate_proxy()
+            time.sleep(delay)
+        except Exception:
+            raise  # non-retryable (e.g., KeyError, ValueError) — propagate immediately
+    # All retries exhausted
+    raise last_exc  # type: ignore[misc]
 
 
 def _parse_cn_number(val: Any) -> float | None:
@@ -80,7 +144,10 @@ def fetch_a_share_financials(symbol: str, years: int = 7) -> dict[str, Any]:
 
     # --- Income Statement ---
     try:
-        df = ak.stock_financial_benefit_ths(symbol=code, indicator="按报告期")
+        df = _akshare_call_with_retry(
+            ak.stock_financial_benefit_ths, code, "按报告期",
+            label=f"A-share IS {code}",
+        )
         # Filter to annual reports only
         annual = df[df["报告期"].str.endswith("12-31")].head(years)
 
@@ -107,11 +174,14 @@ def fetch_a_share_financials(symbol: str, years: int = 7) -> dict[str, Any]:
             })
         logger.info("AkShare A-share IS: %d rows for %s", len(result["income_statement"]), code)
     except Exception:
-        logger.warning("AkShare A-share IS failed for %s", code, exc_info=True)
+        logger.warning("AkShare A-share IS failed for %s (after %d retries)", code, _MAX_RETRIES, exc_info=True)
 
     # --- Balance Sheet ---
     try:
-        df = ak.stock_financial_debt_ths(symbol=code, indicator="按报告期")
+        df = _akshare_call_with_retry(
+            ak.stock_financial_debt_ths, code, "按报告期",
+            label=f"A-share BS {code}",
+        )
         annual = df[df["报告期"].str.endswith("12-31")].head(years)
 
         for _, row in annual.iterrows():
@@ -137,11 +207,14 @@ def fetch_a_share_financials(symbol: str, years: int = 7) -> dict[str, Any]:
             })
         logger.info("AkShare A-share BS: %d rows for %s", len(result["balance_sheet"]), code)
     except Exception:
-        logger.warning("AkShare A-share BS failed for %s", code, exc_info=True)
+        logger.warning("AkShare A-share BS failed for %s (after %d retries)", code, _MAX_RETRIES, exc_info=True)
 
     # --- Cash Flow ---
     try:
-        df = ak.stock_financial_cash_ths(symbol=code, indicator="按报告期")
+        df = _akshare_call_with_retry(
+            ak.stock_financial_cash_ths, code, "按报告期",
+            label=f"A-share CF {code}",
+        )
         annual = df[df["报告期"].str.endswith("12-31")].head(years)
 
         for _, row in annual.iterrows():
@@ -163,7 +236,7 @@ def fetch_a_share_financials(symbol: str, years: int = 7) -> dict[str, Any]:
             })
         logger.info("AkShare A-share CF: %d rows for %s", len(result["cash_flow"]), code)
     except Exception:
-        logger.warning("AkShare A-share CF failed for %s", code, exc_info=True)
+        logger.warning("AkShare A-share CF failed for %s (after %d retries)", code, _MAX_RETRIES, exc_info=True)
 
     return result
 
@@ -282,7 +355,10 @@ def fetch_hk_financials(symbol: str, years: int = 7) -> dict[str, Any]:
 
     # --- Income Statement ---
     try:
-        df = ak.stock_financial_hk_report_em(stock=code, symbol="利润表", indicator="年度")
+        df = _akshare_call_with_retry(
+            ak.stock_financial_hk_report_em, code, "利润表", "年度",
+            label=f"HK IS {code}",
+        )
         pivoted = _pivot_hk_long_format(df, years)
 
         for fiscal_year, items in sorted(pivoted.items()):
@@ -304,7 +380,10 @@ def fetch_hk_financials(symbol: str, years: int = 7) -> dict[str, Any]:
 
     # --- Balance Sheet ---
     try:
-        df = ak.stock_financial_hk_report_em(stock=code, symbol="资产负债表", indicator="年度")
+        df = _akshare_call_with_retry(
+            ak.stock_financial_hk_report_em, code, "资产负债表", "年度",
+            label=f"HK BS {code}",
+        )
         pivoted = _pivot_hk_long_format(df, years)
 
         for fiscal_year, items in sorted(pivoted.items()):
@@ -320,7 +399,10 @@ def fetch_hk_financials(symbol: str, years: int = 7) -> dict[str, Any]:
 
     # --- Cash Flow ---
     try:
-        df = ak.stock_financial_hk_report_em(stock=code, symbol="现金流量表", indicator="年度")
+        df = _akshare_call_with_retry(
+            ak.stock_financial_hk_report_em, code, "现金流量表", "年度",
+            label=f"HK CF {code}",
+        )
         pivoted = _pivot_hk_long_format(df, years)
 
         for fiscal_year, items in sorted(pivoted.items()):
@@ -353,13 +435,20 @@ async def fetch_structured_financials(
     Serialized via _AKSHARE_LOCK — py_mini_racer (V8) is not thread-safe.
     Returns empty dict if market not supported or API fails.
 
-    Circuit breaker: after 3 consecutive failures, skips all further calls
-    to avoid wasting ~20s per ticker on SSL/connection timeouts.
+    Circuit breaker: after N consecutive ticker failures, pauses for 5 minutes
+    then retries (not permanent disable). Prevents wasting time on transient
+    outages while allowing recovery.
     """
-    global _CONSECUTIVE_FAILURES, _CIRCUIT_BROKEN
+    global _CONSECUTIVE_FAILURES, _CIRCUIT_COOLDOWN_UNTIL
 
-    if _CIRCUIT_BROKEN:
-        return {}
+    # If in cooldown, check if it's time to retry
+    if _CIRCUIT_COOLDOWN_UNTIL > 0:
+        if time.time() < _CIRCUIT_COOLDOWN_UNTIL:
+            return {}
+        # Cooldown expired — reset and retry
+        logger.info("AkShare circuit breaker cooldown expired, retrying...")
+        _CONSECUTIVE_FAILURES = 0
+        _CIRCUIT_COOLDOWN_UNTIL = 0.0
 
     async with _AKSHARE_LOCK:
         if market == "A_SHARE":
@@ -367,20 +456,19 @@ async def fetch_structured_financials(
         elif market == "HK":
             result = await asyncio.to_thread(fetch_hk_financials, ticker, years)
         else:
-            # US_ADR uses edgartools XBRL (handled separately)
             return {}
 
-    # Circuit breaker: check if we got any data
+    # Circuit breaker: track consecutive failures
     has_data = any(result.get(k) for k in ("income_statement", "balance_sheet", "cash_flow"))
     if has_data:
         _CONSECUTIVE_FAILURES = 0
     else:
         _CONSECUTIVE_FAILURES += 1
         if _CONSECUTIVE_FAILURES >= _CIRCUIT_BREAKER_THRESHOLD:
-            _CIRCUIT_BROKEN = True
+            _CIRCUIT_COOLDOWN_UNTIL = time.time() + _CIRCUIT_COOLDOWN_SECS
             logger.warning(
-                "AkShare circuit breaker tripped after %d consecutive failures — "
-                "disabling akshare pre-fetch for remaining tickers",
-                _CONSECUTIVE_FAILURES,
+                "AkShare circuit breaker: %d consecutive failures — "
+                "pausing for %ds (not permanent)",
+                _CONSECUTIVE_FAILURES, _CIRCUIT_COOLDOWN_SECS,
             )
     return result
