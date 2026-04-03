@@ -22,9 +22,9 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_SOCKET = os.getenv("CLASH_SOCKET", "/var/tmp/verge/verge-mihomo.sock")
+_DEFAULT_SOCKET = os.getenv("CLASH_SOCKET", "/tmp/verge/verge-mihomo.sock")
 _DEFAULT_PROXY = os.getenv("CLASH_PROXY", "http://127.0.0.1:7890")
-_DEFAULT_GROUP = os.getenv("CLASH_GROUP", "龙猫云 - TotoroCloud")
+_DEFAULT_GROUP = os.getenv("CLASH_GROUP", "🔰 选择节点")
 
 # Skip info nodes (not real proxies)
 _SKIP_KEYWORDS = ("网址", "流量", "到期", "重置", "自动选择", "故障转移")

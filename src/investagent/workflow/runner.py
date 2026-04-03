@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 from pydantic import BaseModel
 
@@ -29,6 +30,10 @@ async def run_agent(
     except Exception:
         logger.debug("Could not capture input for %s", agent.name, exc_info=True)
 
+    t0 = time.time()
     result = await agent.run(input_data, ctx)
+    elapsed = time.time() - t0
     ctx.set_result(agent.name, result)
+    ctx.set_data(f"_agent_time_{agent.name}", round(elapsed, 1))
+    logger.info("[%s] %s took %.1fs", ctx.intake.ticker, agent.name, elapsed)
     return result

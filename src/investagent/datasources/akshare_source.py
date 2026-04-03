@@ -22,6 +22,12 @@ logger = logging.getLogger(__name__)
 # Serialize all AkShare calls to prevent V8 multi-thread initialization.
 _AKSHARE_LOCK = asyncio.Semaphore(1)
 
+# Circuit breaker: after N consecutive failures, skip akshare entirely.
+# Prevents wasting ~20s per ticker on SSL/connection timeouts.
+_CONSECUTIVE_FAILURES = 0
+_CIRCUIT_BREAKER_THRESHOLD = 3
+_CIRCUIT_BROKEN = False
+
 
 def _parse_cn_number(val: Any) -> float | None:
     """Parse Chinese financial number strings like '893.35亿', '137.89亿', '68.64'."""
@@ -346,11 +352,35 @@ async def fetch_structured_financials(
 
     Serialized via _AKSHARE_LOCK — py_mini_racer (V8) is not thread-safe.
     Returns empty dict if market not supported or API fails.
+
+    Circuit breaker: after 3 consecutive failures, skips all further calls
+    to avoid wasting ~20s per ticker on SSL/connection timeouts.
     """
+    global _CONSECUTIVE_FAILURES, _CIRCUIT_BROKEN
+
+    if _CIRCUIT_BROKEN:
+        return {}
+
     async with _AKSHARE_LOCK:
         if market == "A_SHARE":
-            return await asyncio.to_thread(fetch_a_share_financials, ticker, years)
+            result = await asyncio.to_thread(fetch_a_share_financials, ticker, years)
         elif market == "HK":
-            return await asyncio.to_thread(fetch_hk_financials, ticker, years)
-    # US_ADR uses edgartools XBRL (handled separately)
-    return {}
+            result = await asyncio.to_thread(fetch_hk_financials, ticker, years)
+        else:
+            # US_ADR uses edgartools XBRL (handled separately)
+            return {}
+
+    # Circuit breaker: check if we got any data
+    has_data = any(result.get(k) for k in ("income_statement", "balance_sheet", "cash_flow"))
+    if has_data:
+        _CONSECUTIVE_FAILURES = 0
+    else:
+        _CONSECUTIVE_FAILURES += 1
+        if _CONSECUTIVE_FAILURES >= _CIRCUIT_BREAKER_THRESHOLD:
+            _CIRCUIT_BROKEN = True
+            logger.warning(
+                "AkShare circuit breaker tripped after %d consecutive failures — "
+                "disabling akshare pre-fetch for remaining tickers",
+                _CONSECUTIVE_FAILURES,
+            )
+    return result

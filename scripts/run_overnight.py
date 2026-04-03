@@ -496,7 +496,7 @@ async def pipeline_all(
             try:
                 ctx = await run_pipeline(intake, llm=llm)
                 result = _extract_result(ctx, stock)
-            except Exception as e:
+            except BaseException as e:
                 logger.error("Pipeline FAILED for %s %s: %s", ticker, stock.get("name", ""), e)
                 result = {
                     "ticker": ticker, "name": stock.get("name", ""),
@@ -526,9 +526,31 @@ async def pipeline_all(
                 done[0], total, ticker, stock.get("name", ""), label,
                 elapsed_one, eta_h, dist,
             )
+            # Print LLM stats every 5 completions
+            if done[0] % 5 == 0:
+                from investagent.llm import get_llm_stats
+                s = get_llm_stats()
+                logger.info(
+                    "LLM stats: %d calls (%d ok / %d err / %d retry) | "
+                    "avg %.1fs | in=%dk out=%dk tokens | throughput=%.1f calls/min",
+                    s["calls"], s["successes"], s["errors"], s["retries"],
+                    s["avg_latency"],
+                    s["total_input_tokens"] / 1000, s["total_output_tokens"] / 1000,
+                    s["successes"] / (total_elapsed / 60) if total_elapsed > 0 else 0,
+                )
             return result
 
-    results = await asyncio.gather(*[_run(s) for s in stocks])
+    results = await asyncio.gather(*[_run(s) for s in stocks], return_exceptions=True)
+    # Log any exceptions that slipped through
+    for i, r in enumerate(results):
+        if isinstance(r, BaseException):
+            ticker = stocks[i].get("ticker", "?")
+            logger.error("Pipeline gather exception for %s: %s", ticker, r, exc_info=r)
+            results[i] = {
+                "ticker": ticker, "name": stocks[i].get("name", ""),
+                "final_label": "ERROR", "error": str(r),
+                "stopped": True, "agents_completed": 0,
+            }
     return list(results)
 
 
@@ -611,6 +633,9 @@ async def main(
     )
     logging.getLogger().addHandler(file_handler)
     logging.getLogger().setLevel(logging.WARNING)
+    # Allow per-agent timing logs from runner
+    logging.getLogger("investagent.workflow.runner").setLevel(logging.INFO)
+    logging.getLogger("investagent.llm").setLevel(logging.INFO)
 
     # Overnight logger: visible on console
     console = logging.StreamHandler()
@@ -651,18 +676,21 @@ async def main(
         rotator = None
 
     # ---- Phase 1: Universe ----
-    logger.info("Phase 1: Building universe...")
-    t0 = time.time()
-    universe = await asyncio.to_thread(build_top_universe, top_n)
-    logger.info("Phase 1 done: %d stocks (%.1fs)", len(universe), time.time() - t0)
-
-    # Save universe for reference
-    _save_checkpoint("_meta", "universe", {
-        "count": len(universe),
-        "stocks": [{"ticker": s["ticker"], "name": s["name"],
-                     "market_cap": s["market_cap"], "industry": s["industry"]}
-                    for s in universe],
-    })
+    cached_universe = _load_checkpoint("_meta", "universe")
+    if cached_universe and cached_universe.get("stocks"):
+        universe = cached_universe["stocks"]
+        logger.info("Phase 1: loaded %d stocks from cache", len(universe))
+    else:
+        logger.info("Phase 1: Building universe...")
+        t0 = time.time()
+        universe = await asyncio.to_thread(build_top_universe, top_n)
+        logger.info("Phase 1 done: %d stocks (%.1fs)", len(universe), time.time() - t0)
+        _save_checkpoint("_meta", "universe", {
+            "count": len(universe),
+            "stocks": [{"ticker": s["ticker"], "name": s["name"],
+                         "market_cap": s["market_cap"], "industry": s["industry"]}
+                        for s in universe],
+        })
 
     # ---- Phase 2: Ratios ----
     logger.info("Phase 2: Computing ratios for %d stocks...", len(universe))
@@ -839,10 +867,28 @@ if __name__ == "__main__":
     if args.as_of_date:
         backtest_date = date.fromisoformat(args.as_of_date)
 
-    asyncio.run(main(
-        top_n=args.top,
-        pipeline_concurrency=args.pipeline_concurrency,
-        screening_concurrency=args.screening_concurrency,
-        ratio_concurrency=args.ratio_concurrency,
-        as_of_date=backtest_date,
-    ))
+    import signal
+    import traceback
+
+    def _signal_handler(signum, frame):
+        sig_name = signal.Signals(signum).name
+        logging.getLogger("overnight").error(
+            "Received signal %s (%d) — exiting.\n%s",
+            sig_name, signum, "".join(traceback.format_stack(frame)),
+        )
+        sys.exit(128 + signum)
+
+    for sig in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
+        signal.signal(sig, _signal_handler)
+
+    try:
+        asyncio.run(main(
+            top_n=args.top,
+            pipeline_concurrency=args.pipeline_concurrency,
+            screening_concurrency=args.screening_concurrency,
+            ratio_concurrency=args.ratio_concurrency,
+            as_of_date=backtest_date,
+        ))
+    except Exception:
+        logging.getLogger("overnight").error("Fatal exception", exc_info=True)
+        sys.exit(1)
