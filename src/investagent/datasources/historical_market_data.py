@@ -1,7 +1,8 @@
 """Historical market data fetcher for backtesting.
 
-Uses AkShare historical daily data instead of yfinance real-time quotes.
-Ensures no future data leakage: only prices on or before as_of_date are used.
+Primary: baostock (own server, no rate limit, 0.2s/stock)
+Fallback: AkShare Sina source
+Ensures no future data leakage: only prices on or before as_of_date.
 """
 
 from __future__ import annotations
@@ -9,18 +10,77 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import date, timedelta
+from typing import Any
 
 from investagent.datasources.base import MarketDataFetcher, MarketQuote
 from investagent.datasources.resolver import _YFINANCE_SUFFIX
 
 logger = logging.getLogger(__name__)
 
+# Reusable baostock login session (login once, query many)
+_BS_LOGGED_IN = False
 
-def _ticker_to_akshare_code(ticker: str, exchange: str) -> str:
-    """Convert ticker+exchange to AkShare A-share code (digits only)."""
-    import re
-    # Strip any suffix (.SS, .SZ, etc.)
-    return re.sub(r"[^\d]", "", ticker.split(".")[0]).zfill(6)
+
+def _ensure_baostock_login() -> None:
+    global _BS_LOGGED_IN
+    if not _BS_LOGGED_IN:
+        import baostock as bs
+        bs.login()
+        _BS_LOGGED_IN = True
+
+
+def _fetch_price_baostock(ticker: str, exchange: str, as_of_date: date) -> float | None:
+    """Get close price from baostock. Returns None on failure."""
+    import baostock as bs
+
+    _ensure_baostock_login()
+
+    # Convert ticker to baostock format: sh.600519 or sz.000858
+    code = ticker.split(".")[0].zfill(6)
+    prefix = "sh" if code.startswith(("6", "9")) else "sz"
+    bs_code = f"{prefix}.{code}"
+
+    # Look back 10 trading days for holidays
+    start = (as_of_date - timedelta(days=15)).strftime("%Y-%m-%d")
+    end = as_of_date.strftime("%Y-%m-%d")
+
+    try:
+        rs = bs.query_history_k_data_plus(
+            bs_code, "date,close",
+            start_date=start, end_date=end,
+            frequency="d", adjustflag="2",  # 前复权
+        )
+        rows = []
+        while rs.error_code == "0" and rs.next():
+            rows.append(rs.get_row_data())
+        if rows:
+            return float(rows[-1][1])
+    except Exception:
+        logger.debug("baostock failed for %s", ticker, exc_info=True)
+    return None
+
+
+def _fetch_price_sina(ticker: str, exchange: str, as_of_date: date) -> float | None:
+    """Fallback: AkShare Sina source for close price."""
+    try:
+        import akshare as ak
+        from investagent.datasources.akshare_source import _akshare_call_with_retry
+
+        code = ticker.split(".")[0].zfill(6)
+        prefix = "sh" if code.startswith(("6", "9")) else "sz"
+        start = (as_of_date - timedelta(days=15)).strftime("%Y%m%d")
+        end = as_of_date.strftime("%Y%m%d")
+
+        df = _akshare_call_with_retry(
+            ak.stock_zh_a_daily,
+            f"{prefix}{code}", start, end, "qfq",
+            label=f"hist-price Sina {code}",
+        )
+        if not df.empty:
+            return float(df.iloc[-1]["close"])
+    except Exception:
+        logger.debug("Sina fallback failed for %s", ticker, exc_info=True)
+    return None
 
 
 def _fetch_historical_quote_sync(
@@ -30,12 +90,11 @@ def _fetch_historical_quote_sync(
 ) -> MarketQuote:
     """Fetch historical close price and compute market cap as of a specific date.
 
-    Uses AkShare stock_zh_a_hist (前复权 daily) for A-shares.
-    Falls back to yfinance historical for HK/US.
+    Primary: baostock (own server, 0.2s/stock, no rate limit)
+    Fallback: AkShare Sina
     """
-    import akshare as ak
-
-    code = _ticker_to_akshare_code(ticker, exchange)
+    import re
+    code = re.sub(r"[^\d]", "", ticker.split(".")[0]).zfill(6)
 
     # Determine currency
     currency_map = {"SSE": "CNY", "SZSE": "CNY", "BSE": "CNY",
@@ -43,52 +102,23 @@ def _fetch_historical_quote_sync(
                     "HKEX": "HKD", "港交所": "HKD"}
     currency = currency_map.get(exchange, "USD")
 
-    # Fetch daily data — look back 10 trading days to handle holidays
-    start = (as_of_date - timedelta(days=20)).strftime("%Y%m%d")
-    end = as_of_date.strftime("%Y%m%d")
-
     price = None
     market_cap = None
     shares = None
 
-    # A-share: use AkShare (fallback chain: push2his → sina)
     if currency == "CNY":
-        # Primary: stock_zh_a_hist (eastmoney push2his)
-        try:
-            df = ak.stock_zh_a_hist(
-                symbol=code, period="daily",
-                start_date=start, end_date=end, adjust="qfq",
-            )
-            if not df.empty:
-                last_row = df.iloc[-1]
-                price = float(last_row["收盘"])
-                logger.info("Historical price (EM) for %s as_of %s: %.2f", code, as_of_date, price)
-        except Exception:
-            logger.debug("push2his failed for %s, trying sina...", code)
+        # Primary: baostock
+        price = _fetch_price_baostock(ticker, exchange, as_of_date)
+        if price is not None:
+            logger.debug("Historical price (baostock) for %s: %.2f", code, price)
+        else:
+            # Fallback: Sina
+            price = _fetch_price_sina(ticker, exchange, as_of_date)
+            if price is not None:
+                logger.debug("Historical price (Sina) for %s: %.2f", code, price)
 
-        # Fallback: stock_zh_a_daily (sina)
-        if price is None:
-            try:
-                prefix = "sh" if code.startswith("6") else "sz"
-                df = ak.stock_zh_a_daily(
-                    symbol=f"{prefix}{code}",
-                    start_date=start.replace("-", ""),
-                    end_date=end.replace("-", ""),
-                    adjust="qfq",
-                )
-                if not df.empty:
-                    last_row = df.iloc[-1]
-                    price = float(last_row["close"])
-                    # Sina also provides outstanding_share
-                    if "outstanding_share" in last_row and last_row["outstanding_share"] > 0:
-                        shares = float(last_row["outstanding_share"])
-                        market_cap = price * shares
-                    logger.info("Historical price (Sina) for %s as_of %s: %.2f", code, as_of_date, price)
-            except Exception:
-                logger.warning("Both historical APIs failed for %s", code, exc_info=True)
-
-        # Get shares/market_cap from financials if not from Sina
-        if price is not None and market_cap is None:
+        # Compute market cap from EPS + net_income
+        if price is not None:
             try:
                 from investagent.datasources.akshare_source import fetch_a_share_financials
                 financials = fetch_a_share_financials(code, years=2)
@@ -110,6 +140,7 @@ def _fetch_historical_quote_sync(
             suffix = _YFINANCE_SUFFIX.get(exchange, "")
             yf_ticker = f"{ticker}{suffix}" if suffix and not ticker.endswith(suffix) else ticker
             t = yf.Ticker(yf_ticker)
+            start = (as_of_date - timedelta(days=15)).strftime("%Y-%m-%d")
             hist = t.history(start=start, end=(as_of_date + timedelta(days=1)).strftime("%Y-%m-%d"))
             if not hist.empty:
                 price = float(hist["Close"].iloc[-1])
@@ -120,9 +151,9 @@ def _fetch_historical_quote_sync(
         except Exception:
             logger.warning("yfinance historical failed for %s", ticker, exc_info=True)
 
-    # Compute PE if we have earnings
+    # Compute PE
     pe_ratio = None
-    if price and shares and market_cap:
+    if price and currency == "CNY":
         try:
             from investagent.datasources.akshare_source import fetch_a_share_financials
             financials = fetch_a_share_financials(code, years=2)
