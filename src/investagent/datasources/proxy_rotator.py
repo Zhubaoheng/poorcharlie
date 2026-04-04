@@ -41,14 +41,14 @@ _DEFAULT_NODE_PATTERNS = os.getenv(
     "Lite-香港,pro-香港",
 ).split(",")
 
-# Only route these domains through proxy (AkShare data sources).
-# NOTE: push2.eastmoney.com is excluded — its TLS rejects proxy CONNECT
-# tunnels, but direct connection works fine and has lenient rate limits.
+# Domains eligible for proxy fallback (direct-first, proxy on failure).
 _PROXY_DOMAINS = (
-    "10jqka.com.cn",    # 同花顺 (AkShare A-share financials)
-    "sina.com.cn",      # 新浪
-    "legulegu.com",     # 乐股 (Shenwan)
-    "csindex.com.cn",   # 中证指数
+    "push2his.eastmoney.com",  # 东财历史行情 (直连不通，需代理)
+    "push2.eastmoney.com",     # 东财实时行情 (直连不通，需代理)
+    "10jqka.com.cn",           # 同花顺
+    "sina.com.cn",             # 新浪
+    "legulegu.com",            # 乐股 (Shenwan)
+    "csindex.com.cn",          # 中证指数
 )
 
 
@@ -229,7 +229,7 @@ class ClashRotator:
         # Track per-domain failure state
         _using_proxy: set[str] = set()  # domains currently routed through proxy
         _direct_failures: dict[str, int] = {}  # consecutive direct failures per domain
-        _FAILURE_THRESHOLD = 3  # switch to proxy after N consecutive direct failures
+        _FAILURE_THRESHOLD = 1  # switch to proxy after 1st direct failure (fast for always-blocked hosts)
         _RECOVERY_INTERVAL = 300  # try direct again after 5 minutes
         _proxy_activated_at: dict[str, float] = {}
 
@@ -250,10 +250,10 @@ class ClashRotator:
 
             # Route through proxy if activated for this domain
             if host in _using_proxy:
-                kwargs.setdefault("proxies", {
+                kwargs["proxies"] = {
                     "http": proxy_url,
                     "https": proxy_url,
-                })
+                }
                 try:
                     return _original_send(self_session, request, **kwargs)
                 except Exception:
