@@ -100,16 +100,17 @@ class LLMClient:
             len(str(m.get("content", ""))) for m in messages
         )
 
-        # Retry with backoff on rate limit (429) and overload (529)
-        _BACKOFF = [10, 30, 60, 300, 1800]
-        for attempt, wait in enumerate(_BACKOFF):
+        # Retry on ANY transient error: timeout, rate limit, overload, connection reset.
+        # 10 attempts, immediate retry (no backoff) for timeouts,
+        # backoff only for rate limits (429/529).
+        _MAX_ATTEMPTS = 10
+        for attempt in range(_MAX_ATTEMPTS):
             _stats["calls"] += 1
             t0 = time.time()
             try:
                 resp = await self._client.messages.create(**kwargs)
                 latency = time.time() - t0
 
-                # Track stats
                 _stats["successes"] += 1
                 _stats["total_latency"] += latency
                 in_tok = getattr(resp.usage, "input_tokens", 0)
@@ -123,7 +124,6 @@ class LLMClient:
                     input_chars, self.model, resp.stop_reason,
                 )
 
-                # Warn on slow calls
                 if latency > 120:
                     logger.warning(
                         "LLM SLOW call: %.1fs | in=%d out=%d | cumulative avg=%.1fs",
@@ -136,33 +136,38 @@ class LLMClient:
             except (anthropic.RateLimitError, anthropic.APIStatusError) as e:
                 latency = time.time() - t0
                 _stats["retries"] += 1
-                is_last = attempt == len(_BACKOFF) - 1
                 status = e.status_code if hasattr(e, "status_code") else 429
+                # Non-retryable API errors (4xx except 429)
                 if isinstance(e, anthropic.APIStatusError) and status not in (429, 529):
                     _stats["errors"] += 1
                     logger.error("LLM API error %s after %.1fs: %s", status, latency, e)
                     raise
-                if is_last:
+                if attempt == _MAX_ATTEMPTS - 1:
                     _stats["errors"] += 1
-                    logger.error(
-                        "LLM rate limit exhausted after %d attempts (%.1fs total backoff)",
-                        len(_BACKOFF), sum(_BACKOFF),
-                    )
                     raise
+                # Rate limit: backoff
+                wait = min(30 * (attempt + 1), 1800)
                 logger.warning(
-                    "LLM rate limit %s, waiting %ds (attempt %d/%d) | latency=%.1fs",
-                    status, wait, attempt + 1, len(_BACKOFF), latency,
+                    "LLM rate limit %s, waiting %ds (attempt %d/%d)",
+                    status, wait, attempt + 1, _MAX_ATTEMPTS,
                 )
                 await asyncio.sleep(wait)
 
-            except BaseException as e:
+            except Exception as e:
                 latency = time.time() - t0
-                _stats["errors"] += 1
-                logger.error(
-                    "LLM call failed after %.1fs: %s: %s | input~%dchars | stats: %d ok / %d err / %d retry",
-                    latency, type(e).__name__, e, input_chars,
-                    _stats["successes"], _stats["errors"], _stats["retries"],
+                _stats["retries"] += 1
+                if attempt == _MAX_ATTEMPTS - 1:
+                    _stats["errors"] += 1
+                    logger.error(
+                        "LLM failed after %d attempts: %s: %s | input~%dchars",
+                        _MAX_ATTEMPTS, type(e).__name__, e, input_chars,
+                    )
+                    raise
+                # Timeout/connection error: retry immediately (no backoff)
+                logger.warning(
+                    "LLM transient error, retrying immediately (attempt %d/%d): %s: %s",
+                    attempt + 1, _MAX_ATTEMPTS, type(e).__name__,
+                    str(e)[:80],
                 )
-                raise
 
         raise RuntimeError("Unreachable")
