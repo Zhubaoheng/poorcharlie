@@ -449,8 +449,19 @@ def extract_pdf_markdown(raw_content: bytes, max_workers: int = 4) -> str:
         import pymupdf
         import pymupdf4llm
 
+        # Use RapidOCR (ONNX Runtime, C++ backend, thread-safe) for pages
+        # that need OCR. Falls back to no-OCR if RapidOCR not installed.
+        try:
+            from pymupdf4llm.ocr.rapidocr_api import exec_ocr
+            ocr_fn = exec_ocr
+        except ImportError:
+            ocr_fn = None
+
         doc = pymupdf.open(stream=raw_content, filetype="pdf")
-        md = pymupdf4llm.to_markdown(doc, force_text=True)
+        md = pymupdf4llm.to_markdown(
+            doc, force_text=True,
+            ocr_function=ocr_fn,  # RapidOCR if available, else default
+        )
         doc.close()
         return md
 

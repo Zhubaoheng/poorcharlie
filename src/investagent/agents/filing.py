@@ -164,7 +164,10 @@ class FilingAgent(BaseAgent):
             if doc.text_content:
                 text = doc.text_content
             elif doc.raw_content and doc.content_type == "pdf":
-                text = extract_pdf_markdown(doc.raw_content)
+                # Run in thread pool to avoid blocking the event loop
+                # (pymupdf PDF parsing is CPU-intensive)
+                import asyncio
+                text = await asyncio.to_thread(extract_pdf_markdown, doc.raw_content)
             elif doc.raw_content:
                 text = doc.raw_content.decode("utf-8", errors="replace")
             else:
@@ -173,7 +176,7 @@ class FilingAgent(BaseAgent):
             if not text:
                 return {}
 
-            return extract_sections(text, self._market)
+            return await asyncio.to_thread(extract_sections, text, self._market)
 
         except Exception:
             logger.warning("Failed to process %s %s", doc.filing_type, doc.fiscal_year, exc_info=True)
@@ -181,11 +184,12 @@ class FilingAgent(BaseAgent):
 
     async def _get_raw_markdown(self, doc: FilingDocument) -> str:
         """Get raw markdown text from a filing (for fallback when section matching fails)."""
+        import asyncio as _aio
         try:
             if doc.text_content:
                 return doc.text_content
             elif doc.raw_content and doc.content_type == "pdf":
-                return extract_pdf_markdown(doc.raw_content)
+                return await _aio.to_thread(extract_pdf_markdown, doc.raw_content)
             elif doc.raw_content:
                 return doc.raw_content.decode("utf-8", errors="replace")
         except Exception:
