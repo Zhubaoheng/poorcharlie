@@ -153,34 +153,39 @@ def _build_industry_map() -> dict[str, str]:
         return {}
 
 
-def _fetch_spot_universe(ak: Any, top_n: int) -> pd.DataFrame | None:
-    """Primary: eastmoney push2 real-time spot (代码+名称+总市值)."""
+def _fetch_baostock_universe(top_n: int) -> pd.DataFrame | None:
+    """Primary: baostock CSI300+500 constituents (no rate limit, own server)."""
     try:
-        df = ak.stock_zh_a_spot_em()
-        df = df[pd.notna(df["总市值"]) & (df["总市值"] > 0)]
-        df = df.sort_values("总市值", ascending=False).head(top_n * 2)
-        logger.info("[universe] spot_em OK: %d stocks (push2.eastmoney.com)", len(df))
-        return df.rename(columns={"代码": "ticker", "名称": "name", "总市值": "market_cap"})
-    except Exception as e:
-        logger.warning("[universe] spot_em failed: %s", e)
-        return None
+        import baostock as bs
+        from investagent.datasources.historical_market_data import _ensure_baostock_login
+        _ensure_baostock_login()
 
+        frames = []
+        for query_fn, label in [(bs.query_hs300_stocks, "CSI300"), (bs.query_zz500_stocks, "CSI500")]:
+            rs = query_fn()
+            rows = []
+            while rs.error_code == "0" and rs.next():
+                rows.append(rs.get_row_data())
+            if rows:
+                df = pd.DataFrame(rows, columns=rs.fields)
+                df["_index"] = label
+                frames.append(df)
 
-def _fetch_gdhs_universe(ak: Any, top_n: int) -> pd.DataFrame | None:
-    """Fallback 1: eastmoney datacenter 股东户数 (代码+名称+总市值)."""
-    try:
-        df = ak.stock_zh_a_gdhs(symbol="最新")
-        df = df[pd.notna(df["总市值"]) & (df["总市值"] > 0)]
-        df = df.sort_values("总市值", ascending=False).head(top_n * 2)
-        logger.info("[universe] gdhs OK: %d stocks (datacenter-web.eastmoney.com)", len(df))
-        return df.rename(columns={"代码": "ticker", "名称": "name", "总市值": "market_cap"})
+        if not frames:
+            return None
+        combined = pd.concat(frames).drop_duplicates(subset=["code"])
+        # Convert baostock code (sh.600519) to plain code (600519)
+        combined["ticker"] = combined["code"].str.split(".").str[1]
+        combined = combined.rename(columns={"code_name": "name"})
+        logger.info("[universe] baostock CSI300+500: %d stocks", len(combined))
+        return combined[["ticker", "name", "_index"]]
     except Exception as e:
-        logger.warning("[universe] gdhs failed: %s", e)
+        logger.warning("[universe] baostock failed: %s", e)
         return None
 
 
 def _fetch_index_universe(ak: Any, top_n: int) -> pd.DataFrame | None:
-    """Fallback 2: CSI 300 + CSI 500 index constituents (无市值)."""
+    """Fallback: CSI 300 + CSI 500 via csindex.com.cn."""
     try:
         frames = []
         for symbol, label in [("000300", "CSI300"), ("000905", "CSI500")]:
@@ -199,24 +204,20 @@ def _fetch_index_universe(ak: Any, top_n: int) -> pd.DataFrame | None:
 def build_top_universe(top_n: int) -> list[dict[str, Any]]:
     """Fetch top A-shares by market cap with exclusions applied.
 
-    Fallback chain (3 sources, 2 different backends):
-      1. stock_zh_a_spot_em  — push2.eastmoney.com  (全量+市值)
-      2. stock_zh_a_gdhs     — datacenter-web.eastmoney.com (全量+市值)
-      3. index_stock_cons_csindex — csindex.com.cn (CSI300+500, 无市值)
+    Fallback chain:
+      1. baostock CSI300+500 — own server, no rate limit
+      2. index_stock_cons_csindex — csindex.com.cn
     """
     import akshare as ak
 
-    logger.info("Fetching A-share universe (3-source fallback)...")
-    df = _fetch_spot_universe(ak, top_n)
-    source = "spot_em"
-    if df is None:
-        df = _fetch_gdhs_universe(ak, top_n)
-        source = "gdhs"
+    logger.info("Fetching A-share universe (baostock primary, csindex fallback)...")
+    df = _fetch_baostock_universe(top_n)
+    source = "baostock"
     if df is None:
         df = _fetch_index_universe(ak, top_n)
         source = "csi_index"
     if df is None:
-        raise RuntimeError("All 3 universe sources failed")
+        raise RuntimeError("All universe sources failed")
 
     df["ticker"] = df["ticker"].astype(str)
 
@@ -438,6 +439,9 @@ def _extract_result(ctx: Any, stock: dict) -> dict:
         result["confidence"] = getattr(committee, "confidence", "")
         result["thesis"] = getattr(committee, "thesis", "")
         result["anti_thesis"] = getattr(committee, "anti_thesis", "")
+        result["largest_unknowns"] = getattr(committee, "largest_unknowns", [])
+        result["why_now_or_why_not_now"] = getattr(committee, "why_now_or_why_not_now", "")
+        result["next_action"] = getattr(committee, "next_action", "")
     except (KeyError, AttributeError):
         result["final_label"] = "STOPPED" if ctx.is_stopped() else "ERROR"
 
@@ -666,9 +670,15 @@ async def main(
         from investagent.datasources.proxy_rotator import ClashRotator
         rotator = ClashRotator()
         if rotator.available:
-            rotator.patch_requests()
-            rotator.rotate()
-            logger.info("Clash proxy rotation enabled (%d nodes)", len(rotator._nodes))
+            # Health check all nodes before starting — drop dead ones
+            report = rotator.health_check()
+            if not rotator.available:
+                logger.warning("All proxy nodes failed health check, using direct connection")
+                rotator = None
+            else:
+                rotator.patch_requests()
+                rotator.rotate()
+                logger.info("Clash proxy rotation enabled (%d healthy nodes)", len(rotator._nodes))
         else:
             rotator = None
     except Exception:
