@@ -64,15 +64,64 @@ ctx = asyncio.run(run_pipeline(intake, llm=llm))
 ### 批量评估（Top 500 A 股）
 
 ```bash
-# 当前状态评估
+# 全新运行（自动创建隔离的 run 目录）
 uv run python scripts/run_overnight.py --top 500 --pipeline-concurrency 5
 
-# 从 2023 年 11 月开始回测
+# 回测模式（限制数据截止日期）
 uv run python scripts/run_overnight.py \
   --top 500 \
   --as-of-date 2023-11-01 \
   --pipeline-concurrency 5 \
   --screening-concurrency 30
+```
+
+**断点续跑**：如果运行被中断（Ctrl+C、崩溃、断电），直接用相同参数重新运行即可。系统会自动找到上次未完成的 run，从中断处继续：
+
+```bash
+# 崩溃后——直接重跑，自动 resume
+uv run python scripts/run_overnight.py --top 500 --as-of-date 2023-11-01
+```
+
+Resume 原理：
+- `RunManager` 在 `data/runs/` 下为每次运行创建独立目录（如 `overnight_20260408T220000_a1b2/`）
+- 运行状态记录在 `run.json`（`"running"` / `"completed"` / `"failed"`）
+- 重新运行时，`find_resumable()` 找到 status=`"running"` 的最新 run → 复用其 checkpoint 目录
+- 每个 Phase 内部逐 ticker 检查 checkpoint：已完成的跳过，未完成的重新运行
+- ERROR 结果**不写 checkpoint**（确保下次自动重试）
+
+### 存储结构
+
+```
+data/
+├── cache/                                    # 共享缓存（跨 run 复用，不会重复下载）
+│   ├── filings/{market}/{ticker}/            # 财报 PDF + markdown + sections
+│   │   ├── FY_2023.pdf                       # 原始 PDF（首次下载后永久缓存）
+│   │   ├── FY_2023.md                        # 提取的 markdown
+│   │   └── FY_2023.sections.json             # 切分的 sections
+│   └── akshare/{market}/{ticker}.json        # AkShare 结构化数据（30 天 TTL）
+│
+└── runs/                                     # 每次运行独立目录
+    └── overnight_20260408T220000_a1b2/
+        ├── run.json                          # 运行元数据（状态/配置/进度）
+        ├── checkpoints/                      # 分析 checkpoint（本次 run 专属）
+        │   ├── _meta/universe.json
+        │   ├── screening/{ticker}.json
+        │   └── pipeline/{ticker}.json
+        ├── candidate_store.json              # 候选池状态
+        └── results.json                      # 最终报告
+```
+
+- **cache/** 层：存已下载的财报 PDF、提取的文本、AkShare 数据。跨 run 共享——第一次跑 500 家公司会下载 PDF，第二次直接命中缓存，节省 30-50% 时间。
+- **runs/** 层：每次运行一个独立目录。不同 run 互不干扰。Resume 在同一个 run 内进行。完成后标记 `"completed"`，不会被后续 run 误匹配。
+
+### 多次扫描回测
+
+```bash
+# 预计算：跑 5 个扫描日期 + 价格触发
+uv run python scripts/backtest/run_precompute.py --concurrency 5
+
+# 回放：用 backtrader 模拟交易
+uv run python scripts/backtest/run_backtest.py
 ```
 
 ### 运行测试
@@ -84,6 +133,8 @@ uv run python -m pytest tests/ -q
 ## Pipeline 架构
 
 ```
+Part 1: 公司研究（单公司分析）
+──────────────────────────
 股票池（市值 Top N）
   → 规则排除（ST、金融类）
   → 量化预过滤（连续亏损、低 ROE/ROIC、营收萎缩）
@@ -98,7 +149,13 @@ uv run python -m pytest tests/ -q
       5. Gates：accounting_risk + financial_quality（仅拦 POOR）
       6. Critic（魔鬼代言人）
       7. Investment Committee（最终裁决）
-  → Portfolio Construction
+
+Part 2: 投资决策（组合级）
+──────────────────────────
+  CandidateStore（候选池持久化，跨扫描周期演进）
+  → CrossComparisonAgent（横向对比："只能选 10 只，选哪些？"）
+  → PortfolioStrategyAgent（BUY/HOLD/ADD/REDUCE/EXIT + 仓位分配）
+  → 输出 {ticker: weight}（供报告和回测消费）
 ```
 
 ## 代理配置（可选）
