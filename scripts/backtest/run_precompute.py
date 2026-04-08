@@ -22,6 +22,19 @@ from typing import Any
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
+# Bypass proxy for Chinese domestic sites (cninfo, AkShare backends).
+import os
+_NO_PROXY_DOMAINS = (
+    "cninfo.com.cn,static.cninfo.com.cn,"
+    "eastmoney.com,push2.eastmoney.com,push2his.eastmoney.com,"
+    "10jqka.com.cn,sina.com.cn,finance.sina.com.cn,"
+    "csindex.com.cn,legulegu.com,"
+    "hkexnews.hk,www1.hkexnews.hk,"
+    "baostock.com"
+)
+os.environ.setdefault("NO_PROXY", _NO_PROXY_DOMAINS)
+os.environ.setdefault("no_proxy", _NO_PROXY_DOMAINS)
+
 from investagent.config import create_llm_client
 from investagent.llm import LLMClient
 from investagent.schemas.company import CompanyIntake

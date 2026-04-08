@@ -30,6 +30,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
+# Bypass proxy for Chinese domestic sites (cninfo, AkShare backends).
+# Claude Code sets HTTP_PROXY automatically; these sites are faster direct.
+import os
+_NO_PROXY_DOMAINS = (
+    "cninfo.com.cn,static.cninfo.com.cn,"
+    "eastmoney.com,push2.eastmoney.com,push2his.eastmoney.com,"
+    "10jqka.com.cn,sina.com.cn,finance.sina.com.cn,"
+    "csindex.com.cn,legulegu.com,"
+    "hkexnews.hk,www1.hkexnews.hk,"
+    "baostock.com"
+)
+os.environ.setdefault("NO_PROXY", _NO_PROXY_DOMAINS)
+os.environ.setdefault("no_proxy", _NO_PROXY_DOMAINS)
+
 import pandas as pd
 
 from investagent.config import create_llm_client
