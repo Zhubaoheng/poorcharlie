@@ -15,8 +15,11 @@ dependencies = [
     "backtrader>=1.9.78.123",
     "matplotlib>=3.10.8",
     "python-dotenv>=1.2.2",
-    "efinance>=0.5.8",
     "baostock>=0.8.9",
+]
+
+[project.optional-dependencies]
+ocr = [
     "rapidocr-onnxruntime>=1.4.4",
 ]
 
