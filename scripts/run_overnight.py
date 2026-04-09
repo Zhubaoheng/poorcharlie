@@ -672,6 +672,10 @@ async def main(
     logger.addHandler(console)
     logger.setLevel(logging.INFO)
 
+    # Match PDF extraction concurrency to pipeline concurrency
+    from investagent.executors import set_cpu_concurrency
+    set_cpu_concurrency(pipeline_concurrency)
+
     total_start = time.time()
     logger.info("=" * 60)
     logger.info("OVERNIGHT A-SHARE EVALUATION")

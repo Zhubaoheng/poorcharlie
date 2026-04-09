@@ -608,6 +608,10 @@ async def main(concurrency: int = 5) -> None:
     current_holdings: dict[str, float] = {}
     entry_prices: dict[str, float] = {}  # ticker -> price at entry
 
+    # Match PDF extraction concurrency to pipeline concurrency
+    from investagent.executors import set_cpu_concurrency
+    set_cpu_concurrency(concurrency)
+
     # Run isolation via RunManager
     rm = RunManager(_DATA_ROOT)
     resumable = rm.find_resumable("backtest")

@@ -45,14 +45,21 @@ def io_pool() -> ThreadPoolExecutor:
 # ---------------------------------------------------------------------------
 
 _WORKER_MODULE = "investagent.datasources.pdf_extract_worker"
-# Limit concurrent CPU subprocesses to avoid overloading the machine
+# Limit concurrent CPU subprocesses — defaults to cpu_count, can be
+# raised via set_cpu_concurrency() to match pipeline concurrency.
 _CPU_SEM: asyncio.Semaphore | None = None
+
+
+def set_cpu_concurrency(n: int) -> None:
+    """Set CPU subprocess concurrency (call before any extraction)."""
+    global _CPU_SEM
+    _CPU_SEM = asyncio.Semaphore(n)
 
 
 def _get_cpu_sem() -> asyncio.Semaphore:
     global _CPU_SEM
     if _CPU_SEM is None:
-        _CPU_SEM = asyncio.Semaphore(min(4, os.cpu_count() or 2))
+        _CPU_SEM = asyncio.Semaphore(os.cpu_count() or 4)
     return _CPU_SEM
 
 
