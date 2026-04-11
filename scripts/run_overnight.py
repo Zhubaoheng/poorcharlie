@@ -522,8 +522,20 @@ async def pipeline_all(
                 from investagent.datasources.resolver import resolve_filing_fetcher
                 from investagent.datasources.cached_fetcher import CachedFilingFetcher
                 cached_fetcher = CachedFilingFetcher(resolve_filing_fetcher(exchange), filing_cache)
-                ctx = await run_pipeline(intake, llm=llm, filing_fetcher=cached_fetcher, filing_cache=filing_cache, akshare_cache=akshare_cache)
+                ctx = await asyncio.wait_for(
+                    run_pipeline(intake, llm=llm, filing_fetcher=cached_fetcher, filing_cache=filing_cache, akshare_cache=akshare_cache),
+                    timeout=1800,  # 30 min max per stock
+                )
                 result = _extract_result(ctx, stock)
+            except asyncio.TimeoutError:
+                logger.error("Pipeline TIMEOUT for %s %s (>30min)", ticker, stock.get("name", ""))
+                result = {
+                    "ticker": ticker, "name": stock.get("name", ""),
+                    "market_cap": stock.get("market_cap"),
+                    "industry": stock.get("industry", ""),
+                    "final_label": "ERROR", "error": "pipeline timeout >30min",
+                    "stopped": True, "agents_completed": 0,
+                }
             except BaseException as e:
                 logger.error("Pipeline FAILED for %s %s: %s", ticker, stock.get("name", ""), e)
                 result = {
