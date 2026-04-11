@@ -44,7 +44,7 @@ intake = CompanyIntake(ticker="600519", name="贵州茅台", exchange="SSE", sec
 ctx = asyncio.run(run_pipeline(intake, llm=llm))
 
 committee = ctx.get_result("committee")
-print(f"{committee.final_label} ({committee.confidence})")
+print(committee.final_label)
 print(committee.thesis)
 ```
 
@@ -117,12 +117,43 @@ data/
 ### 多次扫描回测
 
 ```bash
-# 预计算：跑 5 个扫描日期 + 价格触发
+# 方式 1：全量预计算（5 个扫描日期 + 触发检测 + 组合决策）
 uv run python scripts/backtest/run_precompute.py --concurrency 5
+
+# 方式 2：用已有 overnight run 结果做回放（跳过 pipeline，只跑决策 + 触发）
+uv run python scripts/backtest/run_replay_s0_s1.py
 
 # 回放：用 backtrader 模拟交易
 uv run python scripts/backtest/run_backtest.py
 ```
+
+### 回测框架
+
+**两阶段架构**：预计算决策 → backtrader 回放
+
+**触发机制**（扫描间隔期间每日监控）：
+
+| | 价格触发 | 估值触发 |
+|---|---|---|
+| 监控对象 | 已持仓 | WATCHLIST+ 未持仓 |
+| 触发条件 | ±20% / ±50% 偏离入场价 | close ≤ base_iv × 0.8（20% MoS） |
+| 用途 | 风控（止损/止盈） | 机会捕捉（便宜价买入） |
+
+估值触发用无量纲比率 `trigger_ratio = trigger_price / scan_close`，免疫复权价漂移。
+
+**仓位约束**（芒格风格）：
+
+| 约束 | 限制 |
+|------|------|
+| 单只上限 | 20% |
+| 单行业上限 | 35% |
+| 无 INVESTABLE 时最低现金 | 50% |
+| 新建仓 WATCHLIST | 最多 5%（极特殊情况） |
+| 已持仓 label 降级 | 不触发减仓（buy/hold 分离） |
+
+**分红处理**：使用前复权（qfq）价格，分红收益已隐含在价格涨跌中，无需额外处理。
+
+**现金计息**：闲置现金按短期国债逆回购利率（GC001，~1.7-1.9%）每日计息。
 
 ### 运行测试
 
@@ -209,14 +240,14 @@ for k, v in data.items():
 
 ## 数据源与 Fallback
 
-| 数据 | 主接口 | 后端 | Fallback 1 | Fallback 2 |
-|------|--------|------|-----------|-----------|
-| 股票池+市值 | `stock_zh_a_spot_em` | eastmoney push2 | `stock_zh_a_gdhs` (datacenter) | CSI 300+500 (csindex) |
-| 行业分类 | `sw_index_third_cons` | legulegu | `stock_board_industry_cons_em` (eastmoney) | — |
-| A 股三表 | `stock_financial_*_ths` | 同花顺 | — | — |
-| 历史股价 | `stock_zh_a_hist` | eastmoney push2his | `stock_zh_a_daily` (sina) | — |
-| A 股年报 | cninfo.com.cn | 巨潮 | — | — |
-| 实时行情 | yfinance | Yahoo Finance | — | — |
+| 数据 | 主接口 | 后端 | Fallback |
+|------|--------|------|---------|
+| 股票池+市值 | baostock CSI300+500 | baostock 自有服务器 | csindex.com.cn |
+| 行业分类 | `sw_index_third_cons` | legulegu | eastmoney |
+| A 股三表 | `stock_financial_report_sina` | 新浪财经 | — |
+| 历史股价（回测） | baostock | baostock 自有服务器 | AkShare Sina |
+| 实时行情 | yfinance | Yahoo Finance | baostock |
+| A 股年报 | cninfo.com.cn | 巨潮 | — |
 
 ## 环境变量
 
