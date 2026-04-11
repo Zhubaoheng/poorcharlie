@@ -63,12 +63,17 @@ logging.basicConfig(
 logger = logging.getLogger("precompute")
 
 # Scan dates per spec
+# Scan dates: 2-3 weeks after earnings filing deadlines to let
+# the market fully digest new disclosures.
+#   年报/一季报 deadline: 4/30 → scan mid-May
+#   半年报 deadline: 8/31 → scan mid-Sep
+#   三季报 deadline: 10/31 → scan mid-Nov
 SCAN_DATES = [
-    date(2023, 11, 6),
-    date(2024, 5, 6),
-    date(2024, 9, 2),
-    date(2025, 5, 6),
-    date(2025, 9, 1),
+    date(2023, 11, 18),   # S0: 三季报截止 10/31 + 18 天
+    date(2024, 5, 20),    # S1: 年报截止 4/30 + 20 天
+    date(2024, 9, 23),    # S2: 半年报截止 8/31 + 23 天
+    date(2025, 5, 19),    # S3: 年报截止 4/30 + 19 天
+    date(2025, 9, 22),    # S4: 半年报截止 8/31 + 22 天
 ]
 
 _DATA_ROOT = Path(__file__).resolve().parents[2] / "data"
