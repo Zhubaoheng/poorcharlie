@@ -87,6 +87,9 @@ class CandidateStore:
                     why_now=r.get("why_now_or_why_not_now", r.get("why_now", "")),
                     scan_date=scan_date,
                     state=state,
+                    intrinsic_value_base=r.get("intrinsic_value_base"),
+                    scan_close_price=r.get("scan_close_price"),
+                    valuation_trigger_ratio=r.get("valuation_trigger_ratio"),
                 )
                 self._state.candidates[ticker] = snapshot
             else:
@@ -125,6 +128,31 @@ class CandidateStore:
             if c.final_label in _ACTIONABLE_LABELS
             and c.state in (CandidateState.ANALYZED, CandidateState.COMPARED, CandidateState.HELD)
         ]
+
+    def get_valuation_watchlist(
+        self, exclude_tickers: set[str] | None = None,
+    ) -> dict[str, dict]:
+        """Return WATCHLIST+ candidates with valid trigger ratios for monitoring.
+
+        Excludes held positions (covered by price triggers) and any tickers
+        in exclude_tickers.
+        """
+        held = {h.ticker for h in self._state.holdings}
+        excluded = held | (exclude_tickers or set())
+        result = {}
+        for ticker, c in self._state.candidates.items():
+            if ticker in excluded:
+                continue
+            if (c.final_label in _ACTIONABLE_LABELS
+                    and c.valuation_trigger_ratio is not None):
+                result[ticker] = {
+                    "trigger_ratio": c.valuation_trigger_ratio,
+                    "scan_close": c.scan_close_price,
+                    "name": c.name,
+                    "industry": c.industry,
+                    "final_label": c.final_label,
+                }
+        return result
 
     def get_candidates_for_rescan(self, staleness_days: int = 180) -> list[dict]:
         """Return candidates needing re-analysis.

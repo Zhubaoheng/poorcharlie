@@ -202,6 +202,28 @@ async def run_screening(
 # Stage 2: Full pipeline
 # ---------------------------------------------------------------------------
 
+VALUATION_MOS_THRESHOLD = 0.80  # base_iv * 0.8 → 20% margin of safety
+
+
+def _compute_valuation_trigger_ratio(result: dict) -> float | None:
+    """Compute (base_iv * 0.8) / scan_close for valuation trigger detection.
+
+    Returns a dimensionless ratio that is stable across forward-adjustment
+    basis changes (splits/dividends). At trigger-check time, multiply the
+    re-fetched anchor close by this ratio to get the adjusted trigger price.
+    """
+    base_iv = result.get("intrinsic_value_base")
+    scan_close = result.get("scan_close_price")
+    if not base_iv or not scan_close or scan_close <= 0 or base_iv <= 0:
+        return None
+    trigger_price = base_iv * VALUATION_MOS_THRESHOLD
+    ratio = round(trigger_price / scan_close, 4)
+    # Only meaningful if trigger price < current price (stock not already cheap enough)
+    if ratio >= 1.0:
+        return None
+    return ratio
+
+
 def _extract_pipeline_result(ctx: Any) -> dict:
     """Extract key fields from PipelineContext for serialization."""
     result: dict[str, Any] = {
@@ -230,8 +252,23 @@ def _extract_pipeline_result(ctx: Any) -> dict:
         result["price_vs_value"] = getattr(valuation, "price_vs_value", "")
         result["margin_of_safety_pct"] = getattr(valuation, "margin_of_safety_pct", None)
         result["meets_hurdle_rate"] = getattr(valuation, "meets_hurdle_rate", False)
+        iv = getattr(valuation, "intrinsic_value_per_share", None)
+        if iv:
+            result["intrinsic_value_base"] = iv.base
     except KeyError:
         pass
+
+    # Extract scan-date market price for valuation trigger ratio
+    try:
+        info = ctx.get_result("info_capture")
+        ms = getattr(info, "market_snapshot", None)
+        if ms and ms.price:
+            result["scan_close_price"] = ms.price
+    except KeyError:
+        pass
+
+    # Compute valuation trigger ratio: (base_iv * 0.8) / scan_close
+    result["valuation_trigger_ratio"] = _compute_valuation_trigger_ratio(result)
 
     # Extract financial quality if available
     try:
@@ -458,6 +495,142 @@ async def handle_price_triggers(
 
 
 # ---------------------------------------------------------------------------
+# Valuation triggers (WATCHLIST+ opportunity detection)
+# ---------------------------------------------------------------------------
+
+def detect_valuation_triggers(
+    watchlist: dict[str, dict],
+    scan_start: date,
+    scan_end: date,
+) -> list[tuple[date, str]]:
+    """Detect valuation-based price triggers for WATCHLIST+ stocks.
+
+    For each monitored stock, fetch daily prices between scan dates.
+    Trigger when close price drops to the 20%-MoS level (base_iv * 0.8).
+
+    Uses a dimensionless trigger_ratio to handle forward-adjustment drift:
+    re-fetch prices so all dates share the same qfq basis, then compare
+    close against anchor_close * trigger_ratio.
+
+    Returns list of (trigger_date, ticker) tuples, one per stock (first only).
+    """
+    from scripts.backtest.data_feeds import fetch_daily_prices
+
+    triggers: list[tuple[date, str]] = []
+
+    for ticker, info in watchlist.items():
+        trigger_ratio = info.get("trigger_ratio")
+        if trigger_ratio is None or trigger_ratio <= 0:
+            continue
+
+        try:
+            df = fetch_daily_prices(ticker, scan_start, scan_end)
+            if df.empty:
+                continue
+
+            # First available close as anchor (same qfq basis as all rows)
+            anchor_close = df.iloc[0].get("close")
+            if anchor_close is None or anchor_close <= 0:
+                continue
+
+            adjusted_trigger_price = anchor_close * trigger_ratio
+
+            for _, row in df.iterrows():
+                close = row.get("close")
+                dt = row.get("date")
+                if close is None or dt is None:
+                    continue
+                if close <= adjusted_trigger_price:
+                    trigger_date = date.fromisoformat(str(dt)[:10])
+                    triggers.append((trigger_date, ticker))
+                    logger.info(
+                        "Valuation trigger: %s on %s, close=%.2f <= trigger=%.2f "
+                        "(ratio=%.4f, anchor=%.2f)",
+                        ticker, trigger_date, close, adjusted_trigger_price,
+                        trigger_ratio, anchor_close,
+                    )
+                    break  # only first trigger per stock per period
+        except Exception:
+            logger.warning("Valuation trigger check failed for %s", ticker, exc_info=True)
+
+    logger.info(
+        "Detected %d valuation triggers between %s and %s (monitored %d stocks)",
+        len(triggers), scan_start, scan_end, len(watchlist),
+    )
+    return triggers
+
+
+async def handle_valuation_triggers(
+    triggers: list[tuple[date, str]],
+    watchlist: dict[str, dict],
+    current_holdings: dict[str, float],
+    analysis_llm: LLMClient,
+    pipeline_results: dict[str, dict],
+) -> dict[str, dict[str, float]]:
+    """Re-run pipeline for valuation-triggered stocks.
+
+    If re-evaluation upgrades to INVESTABLE, run portfolio construction
+    to integrate into portfolio. If still WATCHLIST+, update trigger_ratio
+    in pipeline_results for continued monitoring. If downgraded to
+    REJECT/TOO_HARD, remove from monitoring.
+
+    Returns {date_str: {ticker: weight}} for triggered portfolio changes.
+    """
+    trigger_decisions: dict[str, dict[str, float]] = {}
+
+    for trigger_date, ticker in sorted(triggers):
+        trigger_dir = DATA_DIR / f"valuation_trigger_{trigger_date.isoformat()}"
+        stock = {
+            "ticker": ticker,
+            "name": watchlist.get(ticker, {}).get("name", ""),
+        }
+
+        logger.info("Valuation trigger: %s on %s, re-running pipeline", ticker, trigger_date)
+        result = await run_full_pipeline(
+            [stock], analysis_llm, trigger_dir, {}, concurrency=1,
+        )
+
+        if not result or ticker not in result:
+            continue
+
+        new_result = result[ticker]
+        new_label = new_result.get("final_label", "")
+
+        # Update pipeline_results with new analysis
+        pipeline_results[ticker] = {**pipeline_results.get(ticker, {}), **new_result}
+
+        if new_label == "INVESTABLE":
+            logger.info(
+                "Valuation trigger: %s upgraded to INVESTABLE on %s, running portfolio construction",
+                ticker, trigger_date,
+            )
+            updated_results = dict(pipeline_results)
+            holdings_list = [
+                {"ticker": t, "weight": w, "name": pipeline_results.get(t, {}).get("name", "")}
+                for t, w in current_holdings.items()
+            ]
+            allocations = await run_portfolio_construction(
+                updated_results, analysis_llm, holdings_list, trigger_dir,
+            )
+            if allocations:
+                trigger_decisions[trigger_date.isoformat()] = allocations
+                current_holdings = allocations
+        elif new_label in ("WATCHLIST", "DEEP_DIVE", "SPECIAL_SITUATION"):
+            logger.info(
+                "Valuation trigger: %s remains %s on %s, updating trigger ratio",
+                ticker, new_label, trigger_date,
+            )
+            # trigger_ratio already recomputed in _extract_pipeline_result
+        else:
+            logger.info(
+                "Valuation trigger: %s downgraded to %s on %s, removing from watchlist",
+                ticker, new_label, trigger_date,
+            )
+
+    return trigger_decisions
+
+
+# ---------------------------------------------------------------------------
 # Incremental universe building
 # ---------------------------------------------------------------------------
 
@@ -674,6 +847,43 @@ async def main(concurrency: int = 5) -> None:
                         current_holdings = trigger_decisions[last_trigger]
             except Exception:
                 logger.error("Price trigger processing failed", exc_info=True)
+
+            # Valuation triggers: monitor WATCHLIST+ non-held stocks
+            try:
+                watchlist = store.get_valuation_watchlist(
+                    exclude_tickers=set(current_holdings.keys()),
+                )
+                if watchlist:
+                    logger.info(
+                        "Checking valuation triggers for %d WATCHLIST+ stocks: %s to %s",
+                        len(watchlist), scan_date, next_scan,
+                    )
+                    val_triggers = await asyncio.to_thread(
+                        detect_valuation_triggers,
+                        watchlist,
+                        scan_date + timedelta(days=1), next_scan - timedelta(days=1),
+                    )
+                    if val_triggers:
+                        analysis_llm = create_llm_client("minimax")
+                        val_decisions = await handle_valuation_triggers(
+                            val_triggers, watchlist, current_holdings,
+                            analysis_llm, previous_results,
+                        )
+                        all_decisions.update(val_decisions)
+                        if val_decisions:
+                            last_val = sorted(val_decisions.keys())[-1]
+                            current_holdings = val_decisions[last_val]
+                        # Re-ingest updated results into store
+                        updated = [
+                            {**previous_results[t], "ticker": t}
+                            for _, t in val_triggers
+                            if t in previous_results
+                        ]
+                        if updated:
+                            store.ingest_scan_results(updated, scan_date)
+                            store.save()
+            except Exception:
+                logger.error("Valuation trigger processing failed", exc_info=True)
 
     # Save all decisions for backtrader
     decisions_file = DATA_DIR / "all_decisions.json"

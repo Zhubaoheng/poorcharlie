@@ -1,6 +1,11 @@
-# Spec: 回测脚本（一次性代码）
+# Spec: 回测脚本
 
-回测脚本验证 investagent pipeline 在历史数据上的选股效能。代码放在 `scripts/backtest/`，不进入 `src/investagent/` package，不写单元测试。
+回测脚本验证 investagent pipeline 在历史数据上的选股效能。
+
+**两套入口**：
+- `scripts/run_overnight.py` — 单次大规模评估（支持回测模式 `--as-of-date`），当前实际运行的入口
+- `scripts/backtest/run_precompute.py` — 多扫描点预计算 + 价格触发（四次扫描 S1-S4）
+- `scripts/backtest/run_backtest.py` — backtrader 回放
 
 依赖 `specs/screening-and-portfolio.md` 中定义的永久功能（预筛���、组合构建、比率计算、股票池）。
 
@@ -8,9 +13,9 @@
 
 ### 1.1 根源隔离
 
-使用 **DeepSeek R1 250528** 模型（知识截止 2023年10月），**禁用联网**。回测区间从 2023年11月起，整个回测期间均为模型训练截止日之后的样本外数据，从根源消除前瞻偏差。
+**Overnight 模式（当前实际运行）**：使用 **MiniMax**（`context_window_size=200000, effort=high`）作为唯一 LLM，覆盖全部阶段（筛选 + pipeline 分析 + 组合构建）。通过 `--as-of-date` 参数启用回测模式，数据限制在指定日期之前。
 
-排除规则使用 **MiniMax**（免费无限量），不涉及投资决策，无前瞻偏差风险。
+**多扫描预计算模式**：使用 **DeepSeek R1 250528**（知识截止 2023年10月）进行分析决策，**禁用联网**。排除规则使用 **MiniMax**。回测区间从 2023年11月起，整个回测期间均为模型训练截止日之后的样本外数据，从根源消除前瞻偏差。
 
 ### 1.2 输入数据时间戳校验
 
@@ -32,9 +37,11 @@
 
 ## 2. 时间结构
 
-### 2.1 定期扫描
+### 2.1 扫描模式
 
-每半年一次，本次回测的扫描时点：
+**Overnight 单次扫描**（当前实际运行）：通过 `--as-of-date 2023-11-01` 指定回测时点，一次性评估 CSI300+500 成分股。财务数据限制为 `fiscal_year <= as_of_date.year - 1`，行情使用 `HistoricalMarketDataFetcher`。
+
+**多扫描预计算**：每半年一次，本次回测的扫描时点：
 
 | 编号 | 日期 | ���报数据 |
 |-----|------|---------|
@@ -43,7 +50,7 @@
 | S3 | 2025-05-06（周一） | FY2024 年报 |
 | S4 | 2025-09-01（周一） | H1 2025 半年报 |
 
-### 2.2 价格触��
+### 2.2 价格触发
 
 两次扫描之间，持续监控已持仓标的：
 
@@ -52,9 +59,27 @@
 
 触发后以触发日收盘价执行调仓。
 
-### 2.3 冷启动与增量更新
+### 2.3 估值触发（WATCHLIST+ 机会捕捉）
 
-**冷启动（S1）**：全量扫描，3000+ 家公司经过排除 → 筛选 → pipeline → 组合构建。
+两次扫描之间，持续监控所有 WATCHLIST 以上标的（WATCHLIST / DEEP_DIVE / SPECIAL_SITUATION / INVESTABLE）中**未持仓**的股票：
+
+- 存储触发比率 `trigger_ratio = (base_iv × 0.8) / scan_close`，其中 base_iv 为 valuation agent 产出的中位内在价值
+- 当日收盘价 ≤ anchor_close × trigger_ratio 时触发（20% 安全边际）
+- 每只股票每个扫描间隔最多触发一次
+
+**触发后动作**：
+- 该标的重跑完整 pipeline（以触发日为 scan_date）
+- 若升级为 INVESTABLE → 自动跑组合构建，以触发日收盘价执行调仓
+- 若仍为 WATCHLIST+ → 用新 IV 更新 trigger_ratio，继续监控
+- 若降级为 REJECT / TOO_HARD → 移出监控列表
+
+**复权价处理**：存储无量纲比率（而非绝对价格），触发检测时重新获取整段日线（baostock qfq 统一调整到最新复权基准），取首日 close 为 anchor 乘以比率得到调整后触发价，不受拆股/分红导致的复权基准漂移影响。
+
+### 2.4 冷启动与增量更新
+
+**Overnight 模式**：CSI300+500 成分股（baostock 主数据源，csindex.com.cn 备选），排除 ST 股和金融行业后约 500 只。经 6 阶段（Universe → Ratios → Pre-filter → Screening → Pipeline → Portfolio）评估。
+
+**多扫描冷启动（S1）**：全量扫描，3000+ 家公司经过排除 → 筛选 → pipeline → 组合构建。
 
 **后续扫描（S2-S4）**：增量更新，只重新分析：
 - 当���持仓标的
@@ -67,13 +92,25 @@
 
 ### 3.1 公司内串行，公司间并行
 
-每家公司的 pipeline 严格串行（Filing → Triage → ... → Committee），确保 gate 早停生效。多家公司并发执行，提高吞吐量。
+每家公司的 pipeline：InfoCapture → Filing → Triage（串行）→ 9 Agent 并行分析 → Gate 检查 → Critic → Committee。多家公司并发执行。
 
-并发度取决于 DeepSeek R1 API 速率限制，初始设为 5~10 家，根据限流调整。
+并发度参数（`run_overnight.py`）：
+- `--pipeline-concurrency 5`：pipeline 并发数
+- `--screening-concurrency 20`：筛选并发数
+- `--ratio-concurrency 5`：AkShare 财务数据抓取并发数
+
+支持 **Clash 代理轮换**：每 20 只股票自动切换代理节点，绕过 AkShare 频率限制。
 
 ### 3.2 Gate 早停
 
-pipeline 已有的 gate 机制（triage、accounting risk、financial quality）会提前终止不合格公司。预计 ~60% 在前 3 个 gate 淘汰，大幅降低成本。
+pipeline 内 gate 机制：
+1. Triage: REJECT → 停止（Filing 之后立即判断）
+2. Accounting Risk: RED → 停止（并行分析完成后检查）
+3. Financial Quality: POOR → 停止（moat=WIDE 或 compounding=STRONG 可覆盖）
+
+### 3.3 量化预筛（Overnight 模式新增）
+
+在 LLM 筛选之前，`should_skip_by_ratios()` 基于计算的财务比率进行硬性过滤（连续亏损、ROE 过低、收入萎缩、现金流差），减少 LLM 调用量。
 
 ## 4. 执行假设
 
@@ -100,17 +137,35 @@ pipeline 已有的 gate 机制（triage、accounting risk、financial quality）
 
 ## 5. 回测框架
 
-### 5.1 预计算 + 回放架构
+### 5.1 Overnight 模式（当前实际运行）
+
+`scripts/run_overnight.py` — 单脚本 6 阶段流水线：
+
+```
+Phase 1: Universe      — baostock CSI300+500，排除 ST/金融
+Phase 2: Ratios        — AkShare 三表 → compute_ratios()
+Phase 2.5: Pre-filter  — should_skip_by_ratios() 硬性过滤
+Phase 3: Screening     — LLM 筛选（PROCEED / SKIP / SPECIAL_CASE）
+Phase 4: Pipeline      — 完整 10-stage 公司分析 pipeline
+Phase 5: Portfolio     — PortfolioAgent 组合构建
+Phase 6: Report        — 汇总输出 results.json
+```
+
+断点续跑：每个 phase 结果按 ticker 存入 `data/overnight/bt_{as_of_date}/checkpoints/{phase}/`，重启自动跳过已完成。ERROR 结果不缓存，确保重试。
+
+用法：`uv run python scripts/run_overnight.py --top 2000 --as-of-date 2023-11-01`
+
+### 5.2 多扫描预计算 + 回放架构
 
 pipeline 和 backtrader 完全解耦：
 
-**阶段一：预计算决策**（async，调用 investagent pipeline）
+**阶段一：预计算决策**（`scripts/backtest/run_precompute.py`，async）
 
-按时间线遍历所有决策点，运行 pipeline 生成目标持仓，序列化为 JSON。支持断点续跑：每家公司结果完成后立即写盘，重启时跳过已完成的。
+按时间线遍历 4 个决策点（S1-S4） + 价格触发，运行 pipeline 生成目标持仓，序列化为 JSON。支持断点续跑。
 
 存储路径：`data/backtest/{scan_date}/` 下按 ticker 存放。
 
-**阶段二：回放执行**（backtrader，纯同步）
+**阶段二：回放执行**（`scripts/backtest/run_backtest.py`，backtrader，纯同步）
 
 ```python
 class MungerStrategy(bt.Strategy):
@@ -164,18 +219,26 @@ class MungerStrategy(bt.Strategy):
 
 ## 8. 脚本模块划分
 
-以下文件放在 `scripts/backtest/`，不进入 package：
+**`scripts/run_overnight.py`**（独立入口）：
+- 6 阶段一体化：Universe �� Ratios → Pre-filter → Screening → Pipeline → Portfolio
+- 支持 `--as-of-date` 回测模式
+- 输出：`data/overnight/[bt_{date}/]results.json` + `full_pipeline_results.json` + `screening_results.json`
 
-- `run_precompute.py` — 预计算入口：排除 → 筛选 → pipeline → 组合构建，输出决策 JSON
-- `run_backtest.py` — 回放入口：读取决策 JSON，跑 backtrader，输出指标和图表
+**`scripts/backtest/`**（多扫描 + 回���）：
+- `run_precompute.py` — 预计算入口：4 次扫描 + 价格触发，输出决策 JSON
+- `run_backtest.py` — 回放入口：读取决策 JSON��跑 backtrader，输出指标和图表
 - `temporal.py` — TemporalValidator
-- `data_feeds.py` — 历史行情/基准数据获取
+- `data_feeds.py` — ��史行情/基准数据获取
 - `strategy.py` — MungerStrategy (backtrader)
 - `metrics.py` — 指标计算
 - `report.py` — 报告生成 + 可视化
-- `audit.py` — 简化版 TimeSPEC 审计日志（优先级最低）
+- `test_e2e.py` — 端到��测试
 
-## 9. 成本估算
+## 9. ���本估算
+
+**Overnight 模式（MiniMax）**：MiniMax 免费无限量，成本接近零。
+
+**多扫描模式（DeepSeek R1）**：
 
 定价：输入 ¥2.4/M token，缓存命中 ¥0.48/M，输出 ¥9.6/M。
 
@@ -188,11 +251,38 @@ class MungerStrategy(bt.Strategy):
 
 输出 token（R1 思考链）占 ~62%，无法缓存优化。
 
-## 10. 开放问题
+## 10. Checkpoint 数据结构
+
+**Overnight 模式**：
+
+```
+data/overnight/bt_{as_of_date}/
+├── checkpoints/
+│   ├── _meta/universe.json         # 股票池快��
+│   ├── ratios/{ticker}.json        # 财务比率
+│   ├── screening/{ticker}.json     # 筛选结果
+│   └── pipeline/{ticker}.json      # 全链路分析结果
+├── results.json                    # 汇总报告
+├── full_pipeline_results.json      # 全量 pipeline 结果
+├��─ screening_results.json          # 全量筛选结果
+└── overnight.log                   # 运行日志
+```
+
+**多扫描模式**：
+
+```
+data/backtest/
+├── {scan_date}/{ticker}.json       # 每个扫描点的结果
+├── trigger_{date}/{ticker}.json    # 价格触发的重评估结果
+└── all_decisions.json              # 全部决策点的持仓目标
+```
+
+## 11. ��放问题
 
 | 问题 | 当前状态 |
 |------|---------|
 | 滑点参数合理性 | 已设 0.15%，可敏感性分析 |
 | 涨跌停成交可行性 | 已设顺延规则 |
-| DeepSeek R1 速率限制 | 待评估，影响并发度 |
-| 连续亏损判定 | 第一阶段 LLM 判断，不设硬规则 |
+| MiniMax 模型知识截止日 | 需评估是否存在前瞻偏差 |
+| 连续亏损判定 | 量化预筛 + LLM 判断双层过滤 |
+| AkShare 频率限制 | Clash 代理轮换缓解，每 20 只切换节点 |

@@ -297,3 +297,56 @@ data/
 | S1: 2024-05 | 66 增量 | 0 | 13 | 34 | ~3h |
 
 S0→S1 label 变化率 51%（30/59 只），说明 FY2023 年报带来了大量重新评估。五粮液从唯一的 INVESTABLE 降到 DEEP_DIVE，12 只从 WATCHLIST 升级到 DEEP_DIVE。
+
+### 组合决策演进
+
+#### 问题：PortfolioStrategy 无视 label 满仓
+
+第一版 PortfolioStrategy 没有看到 committee 的 label，直接看底层数据（quality + MoS）就建仓。结果：0 个 INVESTABLE 时给出 104% 仓位（负现金），WATCHLIST 的茅台给了 20%。
+
+**修复 1**：传 `final_label` 给 PortfolioStrategy，加 label→仓位硬约束（INVESTABLE 30%、DEEP_DIVE 10%、WATCHLIST 5%）。
+
+效果：Cash 从 -4% → 30%。但引入了新问题——
+
+#### 问题：label 降级触发大幅调仓，违反芒格"Sit on your ass"
+
+五粮液 S0 以 INVESTABLE 买入 30%，S1 降级为 DEEP_DIVE → 被硬约束强制砍仓到 10%。一次砍掉 2/3 仓位，换手率 ~60%——这是基金经理的合规思维，不是芒格思维。
+
+**根因**：没有区分"建仓约束"和"持仓约束"。Label 约束应该只管"是否值得新买入"，不管"已经持有的是否该卖"。
+
+**修复 2**：分离 Buy vs Hold 约束：
+- **建仓**：严格遵守 label 限制（INVESTABLE 才重仓，DEEP_DIVE 试探）
+- **持仓**：label 降级**不是**减仓理由。只有 4 种根本性恶化才触发 REDUCE/EXIT（护城河侵蚀、管理层失信、永久性损失风险、估值极度脱离）
+
+最终效果：
+
+| | 第一版 | 第二版(label 约束) | 第三版(buy/hold 分离) |
+|---|---|---|---|
+| S0 Cash | -4% | 30% | **57%** |
+| S1 五粮液 | 25%→10%（砍 60%） | 30%→10%（砍 67%） | **25%→20%（微调 20%）** |
+| S1 换手率 | ~60% | ~50% | **~7%** |
+| S1 新增 | 3 只 | 3 只 | **1 只（5%）** |
+
+第三版的 S1 调仓：3 只老仓位 HOLD 不动（五粮液微调），只新增分众传媒 5% 试探——**这才是芒格风格**。
+
+### 估值触发机制
+
+**问题**：回测只在财报日（S1-S4）做决策，WATCHLIST 上的好公司即使跌到便宜价也没有机制捕捉。
+
+**设计**：
+- 触发价 = `base_iv × 0.8`（内在价值打八折，要求 20% MoS）
+- 不存绝对价格（复权会漂移），存无量纲比率 `trigger_ratio = trigger_price / scan_close`
+- 检测时重拉日线，anchor_close × ratio = 触发价（拆股分红后 anchor 和日线同步变化，ratio 不变）
+
+两层触发互斥：已持仓走**价格触发**（±20%/50% 风控），未持仓走**估值触发**（机会捕捉）。
+
+```
+扫描 S1 → pipeline 产出 base_iv + scan_close → 算 trigger_ratio → 存入 CandidateStore
+                                                                          ↓
+S1→S2 之间 → get_valuation_watchlist() 取 WATCHLIST+ 非持仓标的
+           → detect_valuation_triggers() 拉日线，close ≤ anchor × ratio 触发
+           → handle_valuation_triggers() 重跑 pipeline
+                 ├─ INVESTABLE → 自动跑组合构建
+                 ├─ 仍 WATCHLIST+ → 更新 trigger_ratio 继续监控
+                 └─ REJECT/TOO_HARD → 移出监控
+```

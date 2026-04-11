@@ -34,6 +34,10 @@ class CandidateSnapshot(BaseModel, frozen=True):
     why_now: str = ""
     scan_date: date
     state: CandidateState = CandidateState.ANALYZED
+    # Valuation trigger fields (for price-based re-evaluation)
+    intrinsic_value_base: float | None = None     # base IV (median of method estimates)
+    scan_close_price: float | None = None          # qfq close price at scan date
+    valuation_trigger_ratio: float | None = None   # (base_iv * 0.8) / scan_close
 
 
 class PortfolioHolding(BaseModel, frozen=True):
