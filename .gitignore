@@ -11,3 +11,6 @@ output/
 .history/
 deploy/mihomo-config.yaml
 data/
+Poor Charlie*
+backtest.log
+*.pdf
