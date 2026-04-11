@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from datetime import date, timedelta
 from typing import Any
 
@@ -20,9 +21,16 @@ logger = logging.getLogger(__name__)
 _BS_LOGGED_IN = False
 
 
+_BS_LOGIN_LOCK = threading.Lock()
+
+
 def _ensure_baostock_login() -> None:
     global _BS_LOGGED_IN
-    if not _BS_LOGGED_IN:
+    if _BS_LOGGED_IN:
+        return
+    with _BS_LOGIN_LOCK:
+        if _BS_LOGGED_IN:  # double-check after acquiring lock
+            return
         import baostock as bs
         logger.info("baostock: logging in to %s:%s...", "www.baostock.com", 10030)
         lg = bs.login()
