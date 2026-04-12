@@ -51,9 +51,16 @@ _CPU_SEM: asyncio.Semaphore | None = None
 
 
 def set_cpu_concurrency(n: int) -> None:
-    """Set CPU subprocess concurrency (call before any extraction)."""
+    """Set CPU subprocess concurrency, capped at cpu_count.
+
+    Pipeline concurrency can exceed CPU cores (LLM calls are I/O-bound),
+    but PDF extraction is CPU-bound. Over-subscribing CPU causes
+    pymupdf4llm to thrash — one extraction can balloon from 3s to 1000s+.
+    """
     global _CPU_SEM
-    _CPU_SEM = asyncio.Semaphore(n)
+    cpu_count = os.cpu_count() or 4
+    capped = min(n, cpu_count)
+    _CPU_SEM = asyncio.Semaphore(capped)
 
 
 def _get_cpu_sem() -> asyncio.Semaphore:
