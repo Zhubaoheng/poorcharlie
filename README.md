@@ -14,10 +14,7 @@ cd poorcharlie
 curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
 
-# 2. Playwright 浏览器（巨潮资讯网抓取用）
-uv run playwright install
-
-# 3. 配置 LLM（统一两参数：base_url + api_key）
+# 2. 配置 LLM（统一两参数：base_url + api_key）
 cat >> .env <<'EOF'
 LLM_BASE_URL=https://api.minimaxi.com/anthropic
 LLM_API_KEY=sk-xxx
@@ -30,7 +27,7 @@ LLM_PROVIDER=minimax         # 可选标签，用于厂商特例分支（如 Min
 #   LLM_PROVIDER=deepseek
 EOF
 
-# 4. 验证
+# 3. 验证
 uv run python -m pytest tests/ -q           # 275 tests
 uv run poorcharlie 600519                     # 单股分析
 ```
