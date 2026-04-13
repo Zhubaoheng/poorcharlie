@@ -1,10 +1,9 @@
 """End-to-end integration test: screening → pipeline → portfolio.
 
-Uses real MiniMax API to verify the full backtest pipeline works.
-Runs on 3 stocks to keep costs minimal.
+Uses the LLM configured in .env (LLM_BASE_URL / LLM_API_KEY / LLM_MODEL / LLM_PROVIDER)
+to verify the full backtest pipeline works. Runs on 3 stocks to keep costs minimal.
 
 Usage:
-    export MINIMAX_API_KEY="your-key"
     uv run python scripts/backtest/test_e2e.py
 """
 

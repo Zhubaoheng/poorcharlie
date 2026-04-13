@@ -4,10 +4,12 @@
 
 ## 前置条件
 
-1. `.env` 文件配置 API key：
+1. `.env` 文件配置 LLM（统一 `LLM_*` 四变量，见根目录 README）：
    ```
-   MINIMAX_API_KEY=sk-xxx
-   # DEEPSEEK_API_KEY=sk-xxx  (可选，默认用 minimax)
+   LLM_BASE_URL=https://api.minimaxi.com/anthropic
+   LLM_API_KEY=sk-xxx
+   LLM_MODEL=MiniMax-M2.7-highspeed
+   LLM_PROVIDER=minimax
    ```
 
 2. 代理环境：国内数据源（szse.cn, cninfo.com.cn 等）需要直连，设置 `NO_PROXY` 绕过代理：
