@@ -4,13 +4,66 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
+from datetime import datetime, time as dtime, timedelta
 from typing import Any
 
 import anthropic
 import httpx
 
 logger = logging.getLogger(__name__)
+
+
+# Default fallback when no reset schedule is configured: 30-minute sleep.
+_DEFAULT_QUOTA_SLEEP_S = 1800
+_QUOTA_WAKE_BUFFER_S = 60   # small safety margin after the reset boundary
+_QUOTA_MAX_SLEEP_S = 6 * 3600  # never sleep longer than 6h in one shot
+
+
+def _parse_reset_hours(raw: str | None) -> list[int]:
+    """Parse comma-separated hours (0-23). Empty/invalid → []."""
+    if not raw:
+        return []
+    hours: list[int] = []
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            h = int(part)
+        except ValueError:
+            continue
+        if 0 <= h <= 23:
+            hours.append(h)
+    return sorted(set(hours))
+
+
+def _quota_sleep_seconds(provider: str) -> tuple[int, str]:
+    """How long to sleep for a usage-limit hit, and a human-readable description.
+
+    If ``{PROVIDER}_QUOTA_RESET_HOURS`` env is set (e.g. "0,5,10,15,20"),
+    sleep until the next reset hour (local time) + small buffer, capped
+    at _QUOTA_MAX_SLEEP_S. Otherwise fall back to the 30-min default.
+    """
+    env_key = f"{provider.upper()}_QUOTA_RESET_HOURS"
+    reset_hours = _parse_reset_hours(os.getenv(env_key))
+    if not reset_hours:
+        return _DEFAULT_QUOTA_SLEEP_S, "30min (default)"
+
+    now = datetime.now()
+    today = now.date()
+    # Find the next reset boundary strictly after now.
+    candidates = [
+        datetime.combine(today, dtime(h, 0)) for h in reset_hours
+    ] + [
+        datetime.combine(today + timedelta(days=1), dtime(reset_hours[0], 0)),
+    ]
+    next_reset = min(c for c in candidates if c > now)
+    delta = (next_reset - now).total_seconds() + _QUOTA_WAKE_BUFFER_S
+    wait = int(min(max(delta, _QUOTA_WAKE_BUFFER_S), _QUOTA_MAX_SLEEP_S))
+    desc = f"until {next_reset.strftime('%H:%M')} reset (~{wait/60:.0f}min)"
+    return wait, desc
 
 # Cumulative LLM call stats (thread-safe for asyncio single-thread)
 _stats = {
@@ -145,16 +198,17 @@ class LLMClient:
                 status = e.status_code if hasattr(e, "status_code") else 429
                 err_msg = str(e)
 
-                # MiniMax usage limit (error code 2056): wait 30 min.
-                # Gated on provider to avoid matching unrelated "2056" substrings
-                # from other vendors.
+                # MiniMax usage limit (error code 2056): sleep until the next
+                # quota reset boundary (configured via MINIMAX_QUOTA_RESET_HOURS)
+                # or 30 min if unset. Gated on provider to avoid matching
+                # unrelated "2056" substrings from other vendors.
                 if self.provider == "minimax" and (
                     "2056" in err_msg or "usage limit exceeded" in err_msg.lower()
                 ):
-                    wait = 1800
+                    wait, desc = _quota_sleep_seconds(self.provider)
                     logger.warning(
-                        "LLM usage limit exceeded (2056), sleeping %ds (30min) | %s",
-                        wait, err_msg[:120],
+                        "LLM usage limit exceeded (2056), sleeping %s | %s",
+                        desc, err_msg[:120],
                     )
                     await asyncio.sleep(wait)
                     continue  # retry without counting as failure
@@ -195,14 +249,14 @@ class LLMClient:
                 _stats["retries"] += 1
                 err_msg = str(e)
 
-                # MiniMax usage limit (error code 2056): wait 30 min
+                # MiniMax usage limit (error code 2056): sleep until next reset.
                 if self.provider == "minimax" and (
                     "2056" in err_msg or "usage limit exceeded" in err_msg.lower()
                 ):
-                    wait = 1800
+                    wait, desc = _quota_sleep_seconds(self.provider)
                     logger.warning(
-                        "LLM usage limit exceeded (2056), sleeping %ds (30min) | %s",
-                        wait, err_msg[:120],
+                        "LLM usage limit exceeded (2056), sleeping %s | %s",
+                        desc, err_msg[:120],
                     )
                     await asyncio.sleep(wait)
                     continue
