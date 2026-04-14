@@ -731,10 +731,9 @@ async def main(
     logger.info("  Output: %s", OUTPUT_DIR)
     logger.info("=" * 60)
 
-    llm = create_llm_client(provider="minimax", extra_body={
-        "context_window_size": 200000,
-        "effort": "high",
-    })
+    # Connection picked by LLM_DEFAULT_PROFILE env (see .env). MiniMax extra_body
+    # lives in MINIMAX_EXTRA_BODY so it only applies when that profile is active.
+    llm = create_llm_client()
 
     # ---- Proxy rotation (bypass AkShare rate limits) ----
     try:

@@ -14,18 +14,33 @@ cd poorcharlie
 curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
 
-# 2. 配置 LLM（统一两参数：base_url + api_key）
+# 2. 配置 LLM（命名 profile：每家厂商一套 env，改一行即可切换）
 cat >> .env <<'EOF'
-LLM_BASE_URL=https://api.minimaxi.com/anthropic
-LLM_API_KEY=sk-xxx
-LLM_MODEL=MiniMax-M2.7-highspeed
-LLM_PROVIDER=minimax         # 可选标签，用于厂商特例分支（如 MiniMax 2056 配额）
-# 切 DeepSeek：
-#   LLM_BASE_URL=https://api.deepseek.com/anthropic
-#   LLM_API_KEY=...
-#   LLM_MODEL=deepseek-reasoner
-#   LLM_PROVIDER=deepseek
+# MiniMax profile
+MINIMAX_BASE_URL=https://api.minimaxi.com/anthropic
+MINIMAX_API_KEY=sk-xxx
+MINIMAX_MODEL=MiniMax-M2.7-highspeed
+MINIMAX_PROVIDER=minimax
+MINIMAX_EXTRA_BODY={"context_window_size":200000,"effort":"high"}
+
+# 可选：Claude profile（填 key 即可启用）
+# CLAUDE_BASE_URL=https://api.anthropic.com
+# CLAUDE_API_KEY=sk-ant-xxx
+# CLAUDE_MODEL=claude-sonnet-4-6
+# CLAUDE_PROVIDER=claude
+
+# 可选：DeepSeek profile
+# DEEPSEEK_BASE_URL=https://api.deepseek.com/anthropic
+# DEEPSEEK_API_KEY=sk-xxx
+# DEEPSEEK_MODEL=deepseek-reasoner
+# DEEPSEEK_PROVIDER=deepseek
+
+# 当前激活的 profile
+LLM_DEFAULT_PROFILE=minimax
 EOF
+
+# 验证 profile 联通性
+uv run python scripts/llm_diag.py
 
 # 3. 验证
 uv run python -m pytest tests/ -q           # 275 tests
@@ -44,15 +59,18 @@ from poorcharlie.config import create_llm_client
 from poorcharlie.schemas.company import CompanyIntake
 from poorcharlie.workflow.orchestrator import run_pipeline
 
-# 不传参时，自动从 .env 读取 LLM_BASE_URL / LLM_API_KEY / LLM_MODEL / LLM_PROVIDER
-llm = create_llm_client(extra_body={"context_window_size": 200000, "effort": "high"})
+# 无参时按 LLM_DEFAULT_PROFILE 读对应 profile 的 env（{PROFILE}_BASE_URL 等）
+llm = create_llm_client()
 
-# 也可以显式传参（两参数：base_url + api_key），用于多 provider 并存场景：
+# 显式指定 profile（与 LLM_DEFAULT_PROFILE 无关）
+# llm = create_llm_client(profile="claude")
+
+# 完全手工指定连接参数（profile 留空；极少需要）
 # llm = create_llm_client(
 #     base_url="https://api.deepseek.com/anthropic",
 #     api_key="sk-xxx",
 #     model="deepseek-reasoner",
-#     provider="deepseek",   # 标签；用于厂商特例分支
+#     provider="deepseek",
 # )
 
 intake = CompanyIntake(ticker="600519", name="贵州茅台", exchange="SSE", sector="食品饮料")
@@ -63,7 +81,31 @@ print(committee.final_label)
 print(committee.thesis)
 ```
 
-> **调用模型的统一方式**：LLM 只认两个参数 — `base_url` + `api_key`（加可选的 `model` 和 `provider` 标签）。不分厂商的环境变量前缀，统一用 `LLM_*`。任意 OpenAI/Anthropic 兼容的 HTTP 端点都能直接接入，只要换 `LLM_BASE_URL` 和 `LLM_API_KEY`。`LLM_PROVIDER` 是可选标签（`claude` / `minimax` / `deepseek` / `openai`），仅用于驱动少量厂商特例分支（如 MiniMax 2056 配额码的 30 分钟重试），不影响连接本身。
+> **LLM 配置的三层优先级**（`create_llm_client` 的 resolution 顺序）：
+>
+> 1. **显式 kwargs**（`base_url` / `api_key` / `model` / `provider` / `extra_body`）—— 最高优先级
+> 2. **命名 profile**（`profile="claude"` 或 `LLM_DEFAULT_PROFILE` env）—— 从 `{PROFILE}_BASE_URL`、`{PROFILE}_API_KEY`、`{PROFILE}_MODEL`、`{PROFILE}_PROVIDER`、`{PROFILE}_EXTRA_BODY` 读取
+> 3. **Legacy `LLM_*` env**—— 向后兼容，默认 profile env 缺失时自动回退
+>
+> **切换 provider 三种方式**：
+>
+> ```bash
+> # (a) 改 .env 的 LLM_DEFAULT_PROFILE=claude —— 全局切换
+> # (b) 命令行一次性切换：
+> LLM_DEFAULT_PROFILE=claude uv run python scripts/backtest/run_full_backtest.py ...
+> # (c) 代码里显式指定：create_llm_client(profile="claude")
+> ```
+>
+> **Profile 命名与 provider 标签的区别**：
+> - `profile` 是**连接配置的名字**（`minimax` / `claude` / `deepseek` / …）
+> - `provider` 是**厂商标签**，只用于触发厂商特例分支（如 MiniMax 2056 配额的 30 分钟 sleep）
+> - 默认 profile name = provider tag；极少情况下同一 profile 可以指定不同 provider（如多厂商共用同一网关）
+>
+> **Anthropic Messages API 兼容**：MiniMax / Claude / DeepSeek 都支持 Anthropic Messages 协议，换 `base_url` 和 `api_key` 即可。无需换 SDK。
+>
+> **MiniMax 专有参数**（`context_window_size`、`effort`）通过 `MINIMAX_EXTRA_BODY`（JSON 字符串）注入，不污染其他 profile。
+>
+> **验证配置**：`uv run python scripts/llm_diag.py`（报告所有已配置 profile 的连通性 + 单次 ping 延迟）。
 
 ### 回测模式（历史数据）
 
@@ -268,13 +310,29 @@ for k, v in data.items():
 
 ## 环境变量
 
+**LLM profile 变量**（每个 profile 一套；至少配置一个 + 设 `LLM_DEFAULT_PROFILE`）：
+
 | 变量 | 必需 | 说明 |
 |------|:----:|------|
-| `LLM_BASE_URL` | 是 | LLM API base URL（Anthropic / OpenAI 兼容端点） |
-| `LLM_API_KEY` | 是 | LLM API Key |
-| `LLM_MODEL` | 是 | 模型名 |
-| `LLM_PROVIDER` | 否 | 厂商标签 `claude` / `minimax` / `deepseek` / `openai`，默认 `openai`；用于特例分支 |
+| `LLM_DEFAULT_PROFILE` | 是 | 当前激活的 profile 名（`minimax` / `claude` / `deepseek` / `openai` / `qwen`） |
+| `{PROFILE}_BASE_URL` | 是 | 例如 `MINIMAX_BASE_URL`、`CLAUDE_BASE_URL` |
+| `{PROFILE}_API_KEY` | 是 | API key |
+| `{PROFILE}_MODEL` | 是 | 模型名 |
+| `{PROFILE}_PROVIDER` | 否 | 厂商标签（默认等于 profile name）；用于特例分支 |
+| `{PROFILE}_EXTRA_BODY` | 否 | JSON 字符串，厂商专有参数（如 MiniMax 的 `context_window_size`） |
+
+**Legacy（向后兼容，未配置 profile 时用）**：
+
+| 变量 | 必需 | 说明 |
+|------|:----:|------|
+| `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` | 否 | 默认 profile env 缺失时回退使用 |
+| `LLM_PROVIDER` | 否 | 同上 |
 | `LLM_MAX_TOKENS` | 否 | 默认 4096 |
+
+**代理（可选）**：
+
+| 变量 | 必需 | 说明 |
+|------|:----:|------|
 | `CLASH_SOCKET` | 否 | Clash unix socket 路径 |
 | `CLASH_PROXY` | 否 | Clash HTTP 代理 URL |
 | `CLASH_GROUP` | 否 | Clash 代理组名称（节点轮换用） |

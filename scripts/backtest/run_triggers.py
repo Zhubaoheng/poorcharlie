@@ -143,7 +143,7 @@ async def run_triggers(
     from poorcharlie.datasources.cache import AkShareCache, FilingCache
     from opportunity_trigger import reevaluate_ticker
 
-    llm = create_llm_client(provider="minimax")
+    llm = create_llm_client()  # picks LLM_DEFAULT_PROFILE
     filing_cache = FilingCache(PROJECT_ROOT / "data" / "cache" / "filings")
     akshare_cache = AkShareCache(PROJECT_ROOT / "data" / "cache" / "akshare")
 

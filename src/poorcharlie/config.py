@@ -171,32 +171,70 @@ class Settings:
 
 
 def create_llm_client(
+    profile: str | None = None,
+    *,
     base_url: str | None = None,
     api_key: str | None = None,
-    *,
     model: str | None = None,
-    provider: str = "openai",
+    provider: str | None = None,
     extra_body: dict[str, Any] | None = None,
-    env_prefix: str = "LLM",
+    env_prefix: str | None = None,
 ) -> "LLMClient":
-    """Create an LLMClient from base_url + api_key (+ optional provider tag).
+    """Create an LLMClient.
 
-    Any of base_url / api_key / model / provider left None will be filled in
-    from ``{env_prefix}_BASE_URL``, ``{env_prefix}_API_KEY``,
-    ``{env_prefix}_MODEL``, ``{env_prefix}_PROVIDER``.
+    Resolution priority (highest wins):
+        1. Explicit kwargs (base_url / api_key / model / provider / extra_body)
+        2. Named profile via ``profile=`` (or LLM_DEFAULT_PROFILE env)
+        3. Legacy ``LLM_*`` env via ``env_prefix="LLM"`` (backward compat)
+
+    Typical usage after migration:
+        create_llm_client()                 # uses LLM_DEFAULT_PROFILE
+        create_llm_client(profile="claude") # force Claude
     """
     from poorcharlie.llm import LLMClient
+    from poorcharlie.llm_profiles import load_profile, resolve_default_profile
 
-    if base_url is None or api_key is None or model is None:
-        env_cfg = load_llm_config_from_env(env_prefix)
-        base_url = base_url or env_cfg.base_url
-        api_key = api_key or env_cfg.api_key
-        model = model or env_cfg.model
-        if provider == "openai":  # caller didn't override
-            provider = env_cfg.provider
+    # Decide profile: explicit profile kwarg wins. Otherwise, if caller did
+    # not pass full connection kwargs and did not force legacy via env_prefix,
+    # use LLM_DEFAULT_PROFILE.
+    using_explicit_kwargs = (
+        base_url is not None and api_key is not None and model is not None
+    )
+    explicit_profile_requested = profile is not None
+    if profile is None and env_prefix is None and not using_explicit_kwargs:
+        profile = resolve_default_profile()
+
+    # Try profile first. If the profile's env vars are incomplete:
+    #   - caller explicitly asked for this profile → raise (surface the bug)
+    #   - we resolved it from LLM_DEFAULT_PROFILE → silently fall through to
+    #     legacy LLM_* so existing .env files keep working
+    profile_loaded = False
+    if profile:
+        try:
+            p = load_profile(profile)
+            base_url = base_url or p.base_url
+            api_key = api_key or p.api_key
+            model = model or p.model
+            provider = provider or p.provider
+            if extra_body is None:
+                extra_body = dict(p.extra_body)
+            profile_loaded = True
+        except ValueError:
+            if explicit_profile_requested:
+                raise
+
+    # Legacy / explicit-prefix path (also covers default-profile fallback)
+    if not profile_loaded and not using_explicit_kwargs:
+        cfg = load_llm_config_from_env(env_prefix or "LLM")
+        base_url = base_url or cfg.base_url
+        api_key = api_key or cfg.api_key
+        model = model or cfg.model
+        provider = provider or cfg.provider
+        if extra_body is None:
+            extra_body = dict(cfg.extra_body)
 
     return LLMClient(
-        provider=provider,
+        provider=provider or "openai",
         model=model,
         base_url=base_url,
         api_key=api_key,

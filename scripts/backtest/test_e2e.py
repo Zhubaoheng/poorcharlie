@@ -51,11 +51,8 @@ TEST_STOCKS = [
 
 
 def _create_llm() -> LLMClient:
-    """Create MiniMax LLM client."""
-    return create_llm_client(provider="minimax", extra_body={
-        "context_window_size": 200000,
-        "effort": "high",
-    })
+    """Create LLM client for current default profile (see LLM_DEFAULT_PROFILE)."""
+    return create_llm_client()
 
 
 async def step1_screening(llm: LLMClient) -> list[dict]:

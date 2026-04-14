@@ -703,8 +703,8 @@ async def run_scan(
     checkpoint = _load_checkpoint(scan_dir)
     logger.info("Scan %s: %d checkpointed results", scan_date, len(checkpoint))
 
-    exclusion_llm = create_llm_client(provider="minimax")
-    analysis_llm = create_llm_client(provider="minimax")
+    exclusion_llm = create_llm_client()
+    analysis_llm = create_llm_client()
 
     # Build universe (no LLM exclusion — filter by market cap first)
     if is_cold_start:
@@ -866,7 +866,7 @@ async def main(concurrency: int = 5) -> None:
                         scan_date + timedelta(days=1), next_scan - timedelta(days=1),
                     )
                     if val_triggers:
-                        analysis_llm = create_llm_client(provider="minimax")
+                        analysis_llm = create_llm_client()
                         val_decisions = await handle_valuation_triggers(
                             val_triggers, watchlist, current_holdings,
                             analysis_llm, previous_results,
