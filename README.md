@@ -44,7 +44,7 @@ uv run python scripts/llm_diag.py   # ✓ 就通了
 - `qwen` / `deepseek` / `claude` / `openai` → 对应厂商的细节
 - 不填默认 `openai`（不触发任何特例）
 
-### 4 家现成 provider 的 URL + model 模板
+### 常用 provider 模板
 
 直接替换 `LLM_*` 三个值：
 
@@ -54,8 +54,29 @@ uv run python scripts/llm_diag.py   # ✓ 就通了
 | **DashScope**（阿里百炼） | `https://coding.dashscope.aliyuncs.com/apps/anthropic` | `qwen3-coder-plus` | `qwen` |
 | **DeepSeek** | `https://api.deepseek.com/anthropic` | `deepseek-reasoner` | `deepseek` |
 | **Claude**（Anthropic 原生） | `https://api.anthropic.com` | `claude-sonnet-4-6` | `claude` |
+| **智谱 GLM** | `https://open.bigmodel.cn/api/anthropic` | `glm-4.5` | `openai` |
+| **Moonshot / Kimi** | `https://api.moonshot.cn/anthropic` | `kimi-latest` | `openai` |
 
 > MiniMax 可加一行 `LLM_EXTRA_BODY={"context_window_size":200000,"effort":"high"}` 启用大 context。其他厂商不需要。
+
+### 不在表里的 provider 也能用
+
+这张表不是**白名单**——任何兼容 Anthropic Messages API (`POST /v1/messages`) 的端点都能用。`LLM_PROVIDER` 只是个可选标签，只驱动极少的厂商特例（如 MiniMax 2056 配额重试），**填 `openai` 或留空都行**。
+
+**快速自测兼容性**：
+
+```bash
+# 替换你自己的 URL / KEY / MODEL，直接 curl 打一下
+curl -sS -X POST "https://<你的端点>/anthropic/v1/messages" \
+  -H "x-api-key: sk-xxx" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "content-type: application/json" \
+  -d '{"model":"your-model","max_tokens":16,"messages":[{"role":"user","content":"say ok"}]}'
+```
+
+返回 `{"role":"assistant","content":[...]}` 就 100% 能用。返回 OpenAI 格式的 `{"choices":[...]}` 不兼容（纯 OpenAI Chat Completion 端点不支持，需要服务端有 Anthropic 适配层）。
+
+**已确认不兼容**：原生 OpenAI API / Azure OpenAI / Groq 默认端点 / Ollama（协议不同）/ Bedrock（SigV4 认证）。
 
 ### 高级：同时配多家、一行切换
 
