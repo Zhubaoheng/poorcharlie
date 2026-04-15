@@ -534,22 +534,36 @@ def get_label_distribution(run_dir: Path) -> dict[str, int]:
 # Holdings (enriched with latest candidate snapshot)
 # ---------------------------------------------------------------------------
 
+def _store_has_holdings(path: Path) -> bool:
+    """Quick check: does this store file have at least one position?"""
+    if not path.exists():
+        return False
+    try:
+        d = json.loads(path.read_text(encoding="utf-8"))
+        return bool(d.get("holdings"))
+    except Exception:
+        return False
+
+
 def _find_latest_store_path(run_dir: Path) -> Path | None:
-    """Return the most recent authoritative candidate_store.json.
+    """Return the most recent authoritative candidate_store.json with holdings.
 
-    Priority:
-      1. Current run's store (exists only after its Phase 5 decision ran)
+    Walks candidates in recency order and returns the first whose holdings
+    list is non-empty. Without the empty-check, a freshly-surgery'd scan
+    store (e.g. cleared holdings during clean-restart) would hide the
+    real current portfolio from the dashboard.
+
+    Priority (newest first):
+      1. Current run's store
       2. Most recent opportunity-trigger dir's store
-      3. Most recent *completed* scan run's store
-
-    During Phase 4 of a new scan, #1 doesn't exist yet — holdings haven't
-    changed since the previous scan or trigger, so we reach back there.
+      3. Any scan run's store (newest first)
     """
+    candidates: list[Path] = []
+
     current = run_dir / "candidate_store.json"
     if current.exists():
-        return current
+        candidates.append(current)
 
-    # Opportunity trigger dirs
     triggers_dir = FULL_BACKTEST_DIR / "triggers"
     if triggers_dir.exists():
         trig_stores = sorted(
@@ -557,15 +571,19 @@ def _find_latest_store_path(run_dir: Path) -> Path | None:
             key=lambda p: p.stat().st_mtime,
             reverse=True,
         )
-        if trig_stores:
-            return trig_stores[0]
+        candidates.extend(trig_stores)
 
-    # Previous completed scan runs (pick latest by started_at)
     for rm in list_runs():
         p = rm.run_dir / "candidate_store.json"
-        if rm.status == "completed" and p.exists():
+        if p.exists() and p not in candidates:
+            candidates.append(p)
+
+    # Return the newest non-empty one
+    for p in candidates:
+        if _store_has_holdings(p):
             return p
-    return None
+    # Fallback: any existing (even empty) store — better than None
+    return candidates[0] if candidates else None
 
 
 _LAST_HOLDINGS_SOURCE: str = ""
