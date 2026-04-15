@@ -220,6 +220,33 @@ uv run python scripts/backtest/run_backtest.py
 uv run python -m pytest tests/ -q
 ```
 
+### 监控面板（回测跑起来之后）
+
+回测是多小时的异步任务。两个工具看状态：
+
+```bash
+# 一次性快照（适合快速查看）
+uv run python scripts/monitoring/status.py
+
+# 持续刷新的 dashboard（适合旁边开着）
+uv run python scripts/monitoring/dashboard.py
+uv run python scripts/monitoring/dashboard.py --refresh 3    # 改刷新间隔
+uv run python scripts/monitoring/dashboard.py --once         # 渲染一次就退出
+```
+
+两个工具都**只读**：看 `data/runs/<latest>/` + `/tmp/full_backtest.log` + `data/full_backtest/all_decisions.json`。回测代码零改动。
+
+**显示内容**：
+- 进程 PID / elapsed / RSS
+- Scan timeline (S0 ✓ S1 ▶ S2 ○ ...)
+- 当前 phase（1-5 为 scan 内部阶段，6 为 scan 间 opportunity trigger）
+- 完整持仓（ticker / 仓位 / label / Q·V·MoS / entry price）
+- LLM stats（calls / 吞吐 / retry / tokens）
+- Label 分布
+- 错误计数（2056 / APIConn / ERROR）
+- Decision 时间轴（每次 scan 产出的 allocation）
+- 最近 10 条关键日志事件
+
 ## Pipeline 架构
 
 ```
