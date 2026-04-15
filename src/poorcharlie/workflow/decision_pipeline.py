@@ -70,9 +70,16 @@ async def run_decision_pipeline(
                 for w in comparison_output.concentration_warnings:
                     logger.warning("Concentration: %s", w)
         except Exception:
-            logger.error("CrossComparison failed, falling back to simple ranking", exc_info=True)
-            # Fallback: rank by enterprise_quality + margin_of_safety
-            ranked = _fallback_ranking(candidates)
+            logger.error(
+                "CrossComparison failed — preserving current holdings as-is "
+                "instead of forcing a PortfolioStrategy rewrite (would almost "
+                "certainly cause unjustified churn).",
+                exc_info=True,
+            )
+            # Safer fallback: don't pretend we have a ranking. Just return
+            # the current holdings unchanged; next scheduled scan can retry.
+            store.save()
+            return store.to_portfolio_decisions()
     else:
         c = candidates[0]
         ranked = [{

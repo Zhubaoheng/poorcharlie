@@ -142,8 +142,11 @@ class LLMClient:
         _CALL_TIMEOUT = 300  # 5 min max per LLM call (guards against hung connections)
         # Cumulative time spent sleeping on quota-exhaustion (2056). Capped so
         # a permanently-dry plan doesn't block the whole pipeline forever.
+        # Quota polling does NOT consume a retry attempt — it's a separate
+        # dimension bounded by quota_cum_wait_s vs max_wait.
         quota_cum_wait_s = 0
-        for attempt in range(_MAX_ATTEMPTS):
+        attempt = 0
+        while attempt < _MAX_ATTEMPTS:
             _stats["calls"] += 1
             t0 = time.time()
             try:
@@ -220,6 +223,7 @@ class LLMClient:
                     status, wait, attempt + 1, _MAX_ATTEMPTS,
                 )
                 await asyncio.sleep(wait)
+                attempt += 1
 
             except asyncio.TimeoutError:
                 latency = time.time() - t0
@@ -235,6 +239,7 @@ class LLMClient:
                     "LLM call timeout after %ds, retrying (attempt %d/%d) | input~%dchars",
                     _CALL_TIMEOUT, attempt + 1, _MAX_ATTEMPTS, input_chars,
                 )
+                attempt += 1
 
             except Exception as e:
                 latency = time.time() - t0
@@ -276,5 +281,6 @@ class LLMClient:
                     attempt + 1, _MAX_ATTEMPTS, type(e).__name__,
                     str(e)[:80],
                 )
+                attempt += 1
 
         raise RuntimeError("Unreachable")
