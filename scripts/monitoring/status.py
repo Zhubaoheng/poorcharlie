@@ -73,6 +73,38 @@ def print_snapshot(s: Snapshot) -> None:
         parts = [f"{p.scan_id}{glyphs.get(p.status, '?')}({p.scan_date})" for p in s.scans]
         print(f"\nScans   : " + "  ".join(parts))
 
+    # Opportunity queue
+    if s.opp_queue:
+        q = s.opp_queue
+        avg_m = f"{q.avg_duration_s/60:.0f}min avg" if q.avg_duration_s else ""
+        eta = ""
+        if q.eta_remaining_s:
+            eh, em = divmod(int(q.eta_remaining_s // 60), 60)
+            eta = f"  ETA {eh}h{em:02d}m" if eh else f"  ETA {em}m"
+        print(f"\nOpp Queue ({q.completed}/{q.total_detected})  {avg_m}{eta}")
+        for it in q.items:
+            glyph = {"done": "✓", "running": "▶", "pending": "○"}.get(it.status, "?")
+            if it.duration_s:
+                tstr = f" {int(it.duration_s//60)}m{int(it.duration_s%60):02d}s"
+            elif it.status == "running":
+                tstr = " running"
+            else:
+                tstr = ""
+            res = f"  → {it.result_summary}" if it.result_summary else ""
+            print(f"  {glyph} {it.ticker} {it.name[:8]:<8} @{it.trigger_date}{tstr}{res}")
+
+    # Current pipeline
+    if s.ticker_pipeline:
+        tp = s.ticker_pipeline
+        done_count = sum(1 for a in tp.agents if a.completed)
+        print(f"\nPipeline ({tp.ticker} {tp.name}):  {done_count}/14 agents done", end="")
+        if tp.decision_pipeline_active:
+            print(" → decision_pipeline running")
+        elif tp.running_agent:
+            print(f" → running: {tp.running_agent}")
+        else:
+            print()
+
     # Holdings
     if s.holdings:
         total_w = sum(h.weight for h in s.holdings)
@@ -86,8 +118,14 @@ def print_snapshot(s: Snapshot) -> None:
     # LLM
     if s.llm:
         print(f"\nLLM     : {s.llm.calls} calls · ok {s.llm.ok} · err {s.llm.err} · retry {s.llm.retry}")
-        print(f"          avg {s.llm.avg_latency_s:.1f}s · throughput {s.llm.throughput_cpm:.1f}/min · "
+        print(f"          avg {s.llm.avg_latency_s:.1f}s · {s.llm.throughput_cpm:.1f}/min cum · "
+              f"{s.llm.recent_5min_cpm:.1f}/min last 5m · "
               f"tokens {s.llm.input_tokens_k}k in / {s.llm.output_tokens_k}k out")
+        if s.llm.current_call_elapsed_s is not None:
+            mm, ss = divmod(s.llm.current_call_elapsed_s, 60)
+            t_str = f"{mm}m{ss:02d}s" if mm else f"{ss}s"
+            flag = " ⚠" if s.llm.current_call_elapsed_s > 180 else ""
+            print(f"          ▸ LLM call in-flight: {t_str}{flag}")
 
     # Labels
     if s.labels:

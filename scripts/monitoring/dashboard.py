@@ -171,7 +171,20 @@ def _llm_panel(s: Snapshot) -> Panel:
     t.append(f"{s.llm.err}", style="red" if s.llm.err else "white")
     t.append(f"  retry {s.llm.retry}\n")
     t.append(f"Avg      {s.llm.avg_latency_s:.1f}s\n")
-    t.append(f"Through. {s.llm.throughput_cpm:.1f} calls/min\n")
+    # Recent 5min vs cumulative — highlight degradation
+    recent = s.llm.recent_5min_cpm
+    recent_style = "red" if recent < 2 else ("yellow" if recent < 5 else "green")
+    t.append(f"Through. {s.llm.throughput_cpm:.1f} cum · ", style="dim")
+    t.append(f"{recent:.1f} recent 5m", style=recent_style)
+    t.append(" cpm\n")
+    # Current call elapsed — red if > 3min
+    if s.llm.current_call_elapsed_s is not None:
+        secs = s.llm.current_call_elapsed_s
+        mm, ss = divmod(secs, 60)
+        call_str = f"{mm}m{ss:02d}s" if mm else f"{ss}s"
+        style = "red" if secs > 180 else ("yellow" if secs > 60 else "cyan")
+        t.append(f"Current  ", style="bold")
+        t.append(f"in-flight {call_str}\n", style=style)
     t.append(f"Tokens   {s.llm.input_tokens_k}k in / {s.llm.output_tokens_k}k out\n", style="dim")
 
     if s.labels:
@@ -202,14 +215,118 @@ def _llm_panel(s: Snapshot) -> Panel:
     return Panel(t, title="LLM / Metrics", border_style="blue")
 
 
+def _opp_queue_panel(s: Snapshot) -> Panel:
+    q = s.opp_queue
+    if q is None:
+        t = Text("(no opportunity queue active)", style="dim")
+        return Panel(t, title="Opportunity Queue", border_style="magenta")
+
+    table = Table(show_header=True, header_style="bold", show_edge=False, expand=True, pad_edge=False)
+    table.add_column("", width=1)
+    table.add_column("Ticker", style="bold", no_wrap=True, width=7)
+    table.add_column("Name", no_wrap=True, width=8)
+    table.add_column("@", style="dim", no_wrap=True, width=10)
+    table.add_column("Time", justify="right", no_wrap=True, width=6)
+    table.add_column("Result", overflow="ellipsis")
+
+    glyphs = {"done": ("✓", "green"), "running": ("▶", "bold yellow"), "pending": ("○", "dim")}
+    for it in q.items:
+        glyph, style = glyphs.get(it.status, ("?", "white"))
+        if it.status == "done":
+            mm = int(it.duration_s // 60) if it.duration_s else 0
+            ss = int(it.duration_s % 60) if it.duration_s else 0
+            time_str = f"{mm}m{ss:02d}s"
+        elif it.status == "running" and it.started_ts:
+            elapsed = _seconds_since(it.started_ts)
+            time_str = f"{elapsed // 60}m{elapsed % 60:02d}s" if elapsed else "-"
+        else:
+            time_str = "-"
+        table.add_row(
+            Text(glyph, style=style),
+            it.ticker,
+            it.name[:8] if it.name else "",
+            it.trigger_date,
+            time_str,
+            it.result_summary or "",
+            style=style if it.status == "running" else None,
+        )
+
+    # Footer: avg + ETA
+    header_parts = [f"{q.completed}/{q.total_detected} done"]
+    if q.avg_duration_s:
+        avg_m = q.avg_duration_s / 60
+        header_parts.append(f"avg {avg_m:.0f}min")
+    if q.eta_remaining_s:
+        eta_min = q.eta_remaining_s / 60
+        eta_h, eta_m = divmod(int(eta_min), 60)
+        eta_fmt = f"{eta_h}h{eta_m:02d}m" if eta_h else f"{eta_m}m"
+        header_parts.append(f"ETA {eta_fmt}")
+    title = f"Opportunity Queue · {' · '.join(header_parts)}"
+    return Panel(table, title=title, border_style="magenta")
+
+
+def _ticker_pipeline_panel(s: Snapshot) -> Panel:
+    tp = s.ticker_pipeline
+    if tp is None:
+        t = Text("(no single-ticker pipeline running)", style="dim")
+        return Panel(t, title="Current Pipeline", border_style="cyan")
+
+    t = Text()
+    t.append(f"{tp.ticker}  {tp.name}  @{tp.as_of}\n", style="bold")
+    if tp.started_ts:
+        elapsed = _seconds_since(tp.started_ts)
+        if elapsed:
+            mm, ss = divmod(elapsed, 60)
+            t.append(f"  running {mm}m{ss:02d}s\n", style="dim")
+
+    for a in tp.agents:
+        if a.completed:
+            t.append("  ✓ ", style="green")
+            t.append(f"{a.name:<20}", style="dim")
+            t.append(f" {a.duration_s:.0f}s\n", style="dim")
+        elif a.name == tp.running_agent:
+            t.append("  ▶ ", style="bold yellow")
+            t.append(f"{a.name:<20}", style="bold")
+            t.append(f" running...\n", style="yellow")
+        else:
+            t.append("  ○ ", style="dim")
+            t.append(f"{a.name:<20}\n", style="dim")
+
+    if tp.decision_pipeline_active:
+        t.append("  ▶ ", style="bold yellow")
+        t.append("decision_pipeline      ", style="bold")
+        t.append("CrossCompare + PortfolioStrategy\n", style="cyan")
+
+    return Panel(t, title=f"Pipeline · {tp.ticker}", border_style="cyan")
+
+
+def _seconds_since(ts: str | None) -> int | None:
+    if not ts:
+        return None
+    try:
+        import datetime as _dt
+        dt = _dt.datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+        return int((_dt.datetime.now() - dt).total_seconds())
+    except Exception:
+        return None
+
+
 def _events_panel(s: Snapshot) -> Panel:
     t = Text()
     if not s.recent:
         t.append("(no events)", style="dim")
     for e in s.recent[:10]:
-        hhmmss = e.ts[11:19] if len(e.ts) >= 19 else e.ts
-        t.append(f"{hhmmss}  ", style="dim")
-        t.append(e.message[:70] + "\n", style=_level_color(e.level))
+        ago = _seconds_since(e.ts)
+        if ago is None:
+            age_str = e.ts[11:19] if len(e.ts) >= 19 else e.ts
+        elif ago < 60:
+            age_str = f"{ago:>2}s"
+        elif ago < 3600:
+            age_str = f"{ago//60:>2}m"
+        else:
+            age_str = f"{ago//3600:>2}h"
+        t.append(f"{age_str:>4} ago  ", style="dim")
+        t.append(e.message[:65] + "\n", style=_level_color(e.level))
     return Panel(t, title="Recent Events", border_style="blue")
 
 
@@ -239,12 +356,30 @@ def _decisions_panel(s: Snapshot) -> Panel:
 
 def _render(s: Snapshot) -> Layout:
     root = Layout()
-    root.split_column(
-        Layout(_header(s), name="header", size=4),
-        Layout(_scans_panel(s), name="scans", size=6),
-        Layout(name="mid"),
-        Layout(name="bot"),
-    )
+    in_opp_phase = s.phase and s.phase.phase == 6 and s.opp_queue is not None
+
+    if in_opp_phase:
+        # Phase 6: dedicate a large panel to opportunity queue + current pipeline
+        root.split_column(
+            Layout(_header(s), name="header", size=4),
+            Layout(_scans_panel(s), name="scans", size=5),
+            Layout(name="opp", ratio=2),
+            Layout(name="mid", ratio=2),
+            Layout(name="bot", ratio=1),
+        )
+        root["opp"].split_row(
+            Layout(_opp_queue_panel(s), name="opp_queue", ratio=3),
+            Layout(_ticker_pipeline_panel(s), name="ticker_pipeline", ratio=2),
+        )
+    else:
+        # Scan phase or idle: default layout
+        root.split_column(
+            Layout(_header(s), name="header", size=4),
+            Layout(_scans_panel(s), name="scans", size=5),
+            Layout(name="mid", ratio=2),
+            Layout(name="bot", ratio=1),
+        )
+
     root["mid"].split_row(
         Layout(_holdings_panel(s), name="holdings", ratio=2),
         Layout(_llm_panel(s), name="llm", ratio=1),

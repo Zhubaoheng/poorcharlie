@@ -13,7 +13,7 @@ import subprocess
 import sys
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -104,6 +104,48 @@ class LLMStats:
     input_tokens_k: int
     output_tokens_k: int
     throughput_cpm: float
+    recent_5min_cpm: float = 0.0  # throughput over the last 5 minutes
+    current_call_elapsed_s: int | None = None  # seconds since last POST without completion
+
+
+@dataclass
+class AgentStep:
+    name: str
+    duration_s: float | None   # None = still running
+    completed: bool
+
+
+@dataclass
+class TickerPipeline:
+    ticker: str
+    name: str
+    as_of: str
+    started_ts: str | None
+    agents: list[AgentStep]   # ordered by completion time; trailing incomplete entries
+    running_agent: str | None  # agent currently in flight (if any)
+    decision_pipeline_active: bool  # True if all 14 agents done and CrossComparison/PortfolioStrategy running
+
+
+@dataclass
+class OpportunityItem:
+    ticker: str
+    name: str
+    trigger_date: str
+    status: str               # "done" | "running" | "pending"
+    started_ts: str | None
+    finished_ts: str | None
+    duration_s: float | None
+    result_summary: str | None  # e.g. "9 pos, 16% cash [all HOLD]"
+
+
+@dataclass
+class OpportunityQueue:
+    total_detected: int
+    completed: int
+    running: OpportunityItem | None
+    items: list[OpportunityItem]  # full list in order
+    avg_duration_s: float | None
+    eta_remaining_s: int | None
 
 
 @dataclass
@@ -551,6 +593,250 @@ def get_quota_state(run_dir: Path) -> QuotaState:
 
 
 # ---------------------------------------------------------------------------
+# Opportunity trigger queue + per-ticker pipeline progress
+# ---------------------------------------------------------------------------
+
+# All 14 agents in the single-ticker pipeline, ordered canonically.
+_PIPELINE_AGENTS: tuple[str, ...] = (
+    "info_capture", "filing", "triage", "accounting_risk",
+    "financial_quality", "net_cash", "valuation",
+    "moat", "compounding", "psychology", "systems", "ecology",
+    "critic", "committee",
+)
+
+_OPP_VALUATION_TRIGGER_RE = re.compile(
+    r"Valuation trigger: (?P<ticker>\S+) on (?P<date>\d{4}-\d{2}-\d{2})"
+)
+_OPP_PROCESSING_RE = re.compile(
+    r"Processing (?P<n>\d+) opportunity triggers"
+)
+_OPP_START_RE = re.compile(
+    r"Opportunity trigger: running pipeline for (?P<ticker>\S+) (?P<name>\S+) as_of=(?P<as_of>\d{4}-\d{2}-\d{2})"
+)
+_OPP_DONE_RE = re.compile(
+    r"Decision pipeline complete: (?P<n_pos>\d+) positions, (?P<cash>-?\d+)% cash"
+)
+_AGENT_TOOK_RE = re.compile(
+    r"\[(?P<ticker>\d{6}|\w+)\]\s+(?P<agent>[\w_]+)\s+took\s+(?P<sec>[\d.]+)s"
+)
+_HTTP_POST_RE = re.compile(
+    r"httpx INFO HTTP Request: POST"
+)
+_LLM_CALL_DONE_RE = re.compile(
+    r"LLM call #(?P<n>\d+): (?P<dur>[\d.]+)s"
+)
+
+
+def _parse_log_ts(ts_str: str) -> datetime | None:
+    """Parse log timestamp (space-separated) into naive datetime."""
+    try:
+        return datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return None
+
+
+def _seconds_between(a: str | None, b: str | None) -> float | None:
+    """b - a in seconds; None on parse failure."""
+    ta, tb = _parse_log_ts(a or ""), _parse_log_ts(b or "")
+    if ta is None or tb is None:
+        return None
+    return (tb - ta).total_seconds()
+
+
+def get_opportunity_queue(run_dir: Path) -> OpportunityQueue | None:
+    """Parse the orchestrator log for the current opportunity trigger queue.
+
+    Returns None when no opportunity phase is active / discoverable in recent tail.
+    """
+    orch_tail = _read_tail(ORCHESTRATOR_LOG, bytes_limit=400_000)
+    lines = orch_tail.splitlines()
+    if not lines:
+        return None
+
+    # Locate the most recent "Processing N opportunity triggers"
+    processing_idx: int | None = None
+    total_detected = 0
+    for idx in range(len(lines) - 1, -1, -1):
+        m = _OPP_PROCESSING_RE.search(lines[idx])
+        if m:
+            processing_idx = idx
+            total_detected = int(m["n"])
+            break
+    if processing_idx is None:
+        return None
+
+    # Collect detected valuation triggers (full list) from lines before
+    # "Processing N..." banner, going back until "Opportunity watchlist"
+    detected: dict[str, str] = {}  # ticker -> trigger_date
+    for j in range(processing_idx - 1, max(0, processing_idx - 200), -1):
+        m = _OPP_VALUATION_TRIGGER_RE.search(lines[j])
+        if m:
+            # take the earliest-logged trigger date for each ticker
+            detected[m["ticker"]] = m["date"]
+        if "Opportunity watchlist" in lines[j]:
+            break
+
+    # Walk forward from processing_idx to extract opportunity starts and completions
+    started: list[dict[str, str]] = []  # {ticker, name, as_of, ts}
+    completed: list[dict[str, Any]] = []  # {ticker, ts, summary}
+    for idx in range(processing_idx + 1, len(lines)):
+        line = lines[idx]
+        m1 = _OPP_START_RE.search(line)
+        if m1:
+            started.append({
+                "ticker": m1["ticker"],
+                "name": m1["name"],
+                "as_of": m1["as_of"],
+                "ts": line[:19],
+            })
+            continue
+        m2 = _OPP_DONE_RE.search(line)
+        if m2 and started:
+            completed.append({
+                "ticker": started[-1]["ticker"],
+                "ts": line[:19],
+                "summary": f"{m2['n_pos']} pos, {m2['cash']}% cash",
+            })
+
+    # Reconcile: mark status
+    items: list[OpportunityItem] = []
+    done_tickers = {c["ticker"] for c in completed}
+    # Ordered by start time
+    for s in started:
+        done_rec = next((c for c in completed if c["ticker"] == s["ticker"]), None)
+        if done_rec:
+            dur = _seconds_between(s["ts"], done_rec["ts"])
+            items.append(OpportunityItem(
+                ticker=s["ticker"], name=s["name"], trigger_date=s["as_of"],
+                status="done", started_ts=s["ts"], finished_ts=done_rec["ts"],
+                duration_s=dur, result_summary=done_rec["summary"],
+            ))
+        else:
+            # Started but not yet done → currently running (most recent start)
+            items.append(OpportunityItem(
+                ticker=s["ticker"], name=s["name"], trigger_date=s["as_of"],
+                status="running", started_ts=s["ts"], finished_ts=None,
+                duration_s=None, result_summary=None,
+            ))
+
+    # Pending: in detected dict but not in started[]
+    started_set = {s["ticker"] for s in started}
+    for ticker, tdate in detected.items():
+        if ticker not in started_set:
+            items.append(OpportunityItem(
+                ticker=ticker, name="", trigger_date=tdate,
+                status="pending", started_ts=None, finished_ts=None,
+                duration_s=None, result_summary=None,
+            ))
+
+    running = next((it for it in items if it.status == "running"), None)
+    durations = [it.duration_s for it in items if it.status == "done" and it.duration_s]
+    avg = sum(durations) / len(durations) if durations else None
+    remaining = len([it for it in items if it.status != "done"])
+    eta = int(avg * remaining) if avg is not None and remaining > 0 else None
+
+    return OpportunityQueue(
+        total_detected=total_detected,
+        completed=len(completed),
+        running=running,
+        items=items,
+        avg_duration_s=avg,
+        eta_remaining_s=eta,
+    )
+
+
+def get_current_ticker_pipeline(queue: OpportunityQueue | None) -> TickerPipeline | None:
+    """Parse the orchestrator log for the currently-running ticker's agent progress."""
+    if queue is None or queue.running is None:
+        return None
+    running = queue.running
+    orch_tail = _read_tail(ORCHESTRATOR_LOG, bytes_limit=400_000)
+
+    # Find all "[TICKER] AGENT took Ns" lines for the running ticker AFTER its start_ts
+    completed: dict[str, float] = {}
+    for line in orch_tail.splitlines():
+        if running.started_ts and line[:19] < running.started_ts:
+            continue
+        m = _AGENT_TOOK_RE.search(line)
+        if m and m["ticker"] == running.ticker:
+            completed[m["agent"]] = float(m["sec"])
+
+    # Build ordered agent list
+    agents: list[AgentStep] = []
+    for a in _PIPELINE_AGENTS:
+        dur = completed.get(a)
+        agents.append(AgentStep(name=a, duration_s=dur, completed=dur is not None))
+
+    # Determine running_agent: first uncompleted agent after any completed ones
+    running_agent: str | None = None
+    last_completed_idx = -1
+    for i, ag in enumerate(agents):
+        if ag.completed:
+            last_completed_idx = i
+    if last_completed_idx + 1 < len(agents):
+        running_agent = agents[last_completed_idx + 1].name
+
+    # All 14 agents done → currently in decision_pipeline
+    decision_active = all(a.completed for a in agents)
+
+    return TickerPipeline(
+        ticker=running.ticker,
+        name=running.name,
+        as_of=running.trigger_date,
+        started_ts=running.started_ts,
+        agents=agents,
+        running_agent=running_agent,
+        decision_pipeline_active=decision_active,
+    )
+
+
+def get_llm_detail(run_dir: Path, base_stats: LLMStats | None) -> LLMStats | None:
+    """Enrich LLMStats with recent-5min throughput + current-call elapsed."""
+    if base_stats is None:
+        return None
+    orch_tail = _read_tail(ORCHESTRATOR_LOG, bytes_limit=200_000)
+    run_tail = _read_tail(run_dir / "overnight.log", bytes_limit=200_000)
+    combined = orch_tail.splitlines() + run_tail.splitlines()
+
+    now = datetime.now()
+    five_min_ago = now - timedelta(minutes=5)
+
+    # Recent-5min throughput: count LLM call # lines in last 5 min (dedup by ts)
+    recent_count = 0
+    seen: set[str] = set()
+    for line in combined:
+        ts = _parse_log_ts(line[:19])
+        if ts is None or ts < five_min_ago:
+            continue
+        m = _LLM_CALL_DONE_RE.search(line)
+        if m:
+            key = line[:24]
+            if key not in seen:
+                seen.add(key)
+                recent_count += 1
+    recent_cpm = recent_count / 5.0
+
+    # Current call elapsed: last httpx POST without subsequent LLM call # completion
+    last_post_ts: str | None = None
+    last_done_ts: str | None = None
+    for line in combined:
+        if _HTTP_POST_RE.search(line):
+            last_post_ts = line[:19]
+        elif _LLM_CALL_DONE_RE.search(line):
+            last_done_ts = line[:19]
+    current_elapsed: int | None = None
+    if last_post_ts and (last_done_ts is None or last_post_ts > last_done_ts):
+        ts = _parse_log_ts(last_post_ts)
+        if ts:
+            current_elapsed = int((now - ts).total_seconds())
+
+    # Rebuild LLMStats with new fields
+    base_stats.recent_5min_cpm = recent_cpm
+    base_stats.current_call_elapsed_s = current_elapsed
+    return base_stats
+
+
+# ---------------------------------------------------------------------------
 # Recent events (for dashboard feed)
 # ---------------------------------------------------------------------------
 
@@ -564,14 +850,20 @@ _INTERESTING_PATTERNS = (
     re.compile(r"LLM rate limit"),
     re.compile(r"LLM call timeout"),
     re.compile(r"Decision pipeline complete"),
-    re.compile(r"Opportunity trigger"),
+    re.compile(r"Opportunity trigger: running"),
     re.compile(r"Valuation trigger"),
     re.compile(r"Price obs"),
     re.compile(r"Running CrossComparisonAgent"),
     re.compile(r"Running PortfolioStrategyAgent"),
     re.compile(r"Reusing existing completed run"),
     re.compile(r"Saved \d+ decision points"),
+    re.compile(r"SCAN S\d"),
+    re.compile(r"LLM SLOW"),
 )
+
+# Lines containing any of these substrings are filtered out even if they
+# match an interesting pattern (e.g. noisy HTTP access log).
+_EVENT_BLOCKLIST = ("httpx INFO HTTP Request", "baostock:", "socket timeout")
 
 
 def get_recent_events(n: int = 10) -> list[Event]:
@@ -585,6 +877,8 @@ def get_recent_events(n: int = 10) -> list[Event]:
         run_lines = _read_tail(latest.run_dir / "overnight.log").splitlines()
 
     def _event_from(line: str) -> Event | None:
+        if any(b in line for b in _EVENT_BLOCKLIST):
+            return None
         for pat in _INTERESTING_PATTERNS:
             if pat.search(line):
                 # Standard log format: "YYYY-MM-DD HH:MM:SS,ms LEVEL msg"
@@ -593,10 +887,17 @@ def get_recent_events(n: int = 10) -> list[Event]:
                     level = "WARNING"
                 elif " ERROR " in line:
                     level = "ERROR"
+                # Strip "YYYY-MM-DD HH:MM:SS,ms LEVEL " prefix for cleaner display
+                msg = line[24:].strip() if len(line) > 24 else line
+                # Remove the logger name if present (e.g. "poorcharlie.llm WARNING ...")
+                for lvl in (" INFO ", " WARNING ", " ERROR "):
+                    if lvl in msg:
+                        msg = msg.split(lvl, 1)[1]
+                        break
                 return Event(
                     ts=line[:19] if len(line) >= 19 else "",
                     level=level,
-                    message=line[24:].strip() if len(line) > 24 else line,
+                    message=msg,
                 )
         return None
 
@@ -711,22 +1012,29 @@ class Snapshot:
     recent: list[Event]
     scans: list[ScanPoint]
     decisions: list[Decision]
+    opp_queue: OpportunityQueue | None = None
+    ticker_pipeline: TickerPipeline | None = None
 
 
 def get_snapshot() -> Snapshot:
     process = get_active_process()
     run = get_latest_run()
     phase = progress = llm = errors = quota = None
+    opp_queue: OpportunityQueue | None = None
+    ticker_pipeline: TickerPipeline | None = None
     labels: dict[str, int] = {}
     holdings: list[HoldingDetail] = []
     if run is not None:
         phase = get_current_phase(run.run_dir)
         progress = get_pipeline_progress(run.run_dir)
-        llm = get_llm_stats(run.run_dir)
+        base_llm = get_llm_stats(run.run_dir)
+        llm = get_llm_detail(run.run_dir, base_llm)
         labels = get_label_distribution(run.run_dir)
         holdings = get_holdings_enriched(run.run_dir)
         errors = get_error_counters(run.run_dir, since_iso=run.started_at[:19] if run.started_at else None)
         quota = get_quota_state(run.run_dir)
+        opp_queue = get_opportunity_queue(run.run_dir)
+        ticker_pipeline = get_current_ticker_pipeline(opp_queue)
     return Snapshot(
         now_iso=datetime.now(tz=timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S"),
         process=process,
@@ -741,4 +1049,6 @@ def get_snapshot() -> Snapshot:
         recent=get_recent_events(n=10),
         scans=get_scan_schedule(),
         decisions=get_decision_timeline(),
+        opp_queue=opp_queue,
+        ticker_pipeline=ticker_pipeline,
     )
