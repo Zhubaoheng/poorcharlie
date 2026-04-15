@@ -827,6 +827,11 @@ def get_opportunity_queue(run_dir: Path) -> OpportunityQueue | None:
                 duration_s=None, result_summary=None,
             ))
 
+    # Sort by trigger_date for chronological display (matches cascading
+    # execution order; pending items were previously in dict iteration
+    # order which looked random).
+    items.sort(key=lambda it: (it.trigger_date, it.ticker))
+
     running = next((it for it in items if it.status == "running"), None)
     durations = [it.duration_s for it in items if it.status == "done" and it.duration_s]
     avg = sum(durations) / len(durations) if durations else None
