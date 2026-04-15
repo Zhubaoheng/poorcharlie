@@ -11,49 +11,113 @@ git clone https://github.com/Zhubaoheng/poorcharlie.git
 cd poorcharlie
 
 # 1. 安装 uv + Python 依赖（自动创建 Python 3.12 虚拟环境）
+#    无需 Tesseract：PDF 用 pymupdf 原生文本提取
 curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
 
-# 2. 配置 LLM（命名 profile：每家厂商一套 env，改一行即可切换）
-cat >> .env <<'EOF'
-# MiniMax profile
-MINIMAX_BASE_URL=https://api.minimaxi.com/anthropic
-MINIMAX_API_KEY=sk-xxx
-MINIMAX_MODEL=MiniMax-M2.7-highspeed
-MINIMAX_PROVIDER=minimax
-MINIMAX_EXTRA_BODY={"context_window_size":200000,"effort":"high"}
-
-# 可选：Claude profile（填 key 即可启用）
-# CLAUDE_BASE_URL=https://api.anthropic.com
-# CLAUDE_API_KEY=sk-ant-xxx
-# CLAUDE_MODEL=claude-sonnet-4-6
-# CLAUDE_PROVIDER=claude
-
-# 可选：DeepSeek profile
-# DEEPSEEK_BASE_URL=https://api.deepseek.com/anthropic
-# DEEPSEEK_API_KEY=sk-xxx
-# DEEPSEEK_MODEL=deepseek-reasoner
-# DEEPSEEK_PROVIDER=deepseek
-
-# 可选：DashScope (阿里云百炼) profile — Qwen via Anthropic-compatible endpoint
-# DASHSCOPE_BASE_URL=https://coding.dashscope.aliyuncs.com/apps/anthropic
-# DASHSCOPE_API_KEY=sk-sp-xxx
-# DASHSCOPE_MODEL=qwen3-coder-plus
-# DASHSCOPE_PROVIDER=qwen
-
-# 当前激活的 profile
-LLM_DEFAULT_PROFILE=minimax
-EOF
-
-# 验证 profile 联通性
-uv run python scripts/llm_diag.py
+# 2. 配置 LLM（复制下面四选一到 .env，填入 API key 即可）
+#    → 详见下一节"LLM 配置"。至少需要一家。
 
 # 3. 验证
-uv run python -m pytest tests/ -q           # 275 tests
+uv run python scripts/llm_diag.py            # LLM 连通性
+uv run python -m pytest tests/ -q             # 275 tests
 uv run poorcharlie 600519                     # 单股分析
 ```
 
-无需安装 Tesseract 或其他系统依赖——PDF 解析使用 pymupdf 原生文本提取（A 股/港股年报均为文本 PDF，不需要 OCR）。
+## LLM 配置
+
+项目支持任意 **Anthropic Messages API 兼容** 的端点。下面四家是现成的（可只配一家，用 `LLM_DEFAULT_PROFILE` 切换）：
+
+### 方式 A：MiniMax（国内，默认推荐）
+
+```bash
+cat >> .env <<'EOF'
+MINIMAX_BASE_URL=https://api.minimaxi.com/anthropic
+MINIMAX_API_KEY=你的-minimax-api-key
+MINIMAX_MODEL=MiniMax-M2.7-highspeed
+MINIMAX_PROVIDER=minimax
+MINIMAX_EXTRA_BODY={"context_window_size":200000,"effort":"high"}
+LLM_DEFAULT_PROFILE=minimax
+EOF
+```
+
+### 方式 B：DashScope（阿里云百炼，Qwen）
+
+```bash
+cat >> .env <<'EOF'
+DASHSCOPE_BASE_URL=https://coding.dashscope.aliyuncs.com/apps/anthropic
+DASHSCOPE_API_KEY=你的-dashscope-api-key
+DASHSCOPE_MODEL=qwen3-coder-plus
+DASHSCOPE_PROVIDER=qwen
+LLM_DEFAULT_PROFILE=dashscope
+EOF
+```
+
+### 方式 C：DeepSeek
+
+```bash
+cat >> .env <<'EOF'
+DEEPSEEK_BASE_URL=https://api.deepseek.com/anthropic
+DEEPSEEK_API_KEY=你的-deepseek-api-key
+DEEPSEEK_MODEL=deepseek-reasoner
+DEEPSEEK_PROVIDER=deepseek
+LLM_DEFAULT_PROFILE=deepseek
+EOF
+```
+
+### 方式 D：Claude（Anthropic 原生）
+
+```bash
+cat >> .env <<'EOF'
+CLAUDE_BASE_URL=https://api.anthropic.com
+CLAUDE_API_KEY=sk-ant-你的-key
+CLAUDE_MODEL=claude-sonnet-4-6
+CLAUDE_PROVIDER=claude
+LLM_DEFAULT_PROFILE=claude
+EOF
+```
+
+### 验证配置
+
+```bash
+uv run python scripts/llm_diag.py
+# 期望输出:
+# Configured profiles: ['minimax']            ← 已配置的 profile
+# Default profile: minimax
+# ✓ minimax  2.31s  MiniMax-M2.7-highspeed (minimax)  reply='ok'
+```
+
+看到 `✓` 就是通了。看到 `✗` 按报错信息排查。
+
+### 同时配多家 + 切换
+
+四家都写进 `.env` 也没关系（不冲突）。切换只需改 `LLM_DEFAULT_PROFILE`：
+
+```bash
+# 方式 1：改 .env
+LLM_DEFAULT_PROFILE=dashscope
+
+# 方式 2：命令行一次性切换
+LLM_DEFAULT_PROFILE=claude uv run python scripts/backtest/run_full_backtest.py ...
+
+# 方式 3：代码里显式指定
+llm = create_llm_client(profile="deepseek")
+```
+
+### 自己加一个新 provider
+
+只要端点兼容 Anthropic Messages API（POST `/v1/messages`），任意名字的 profile 都能用：
+
+```bash
+cat >> .env <<'EOF'
+MYPROVIDER_BASE_URL=https://xxx.example.com/anthropic
+MYPROVIDER_API_KEY=你的-key
+MYPROVIDER_MODEL=some-model-name
+LLM_DEFAULT_PROFILE=myprovider
+EOF
+
+uv run python scripts/llm_diag.py  # 应自动发现 myprovider
+```
 
 ## 使用方式
 
@@ -65,19 +129,8 @@ from poorcharlie.config import create_llm_client
 from poorcharlie.schemas.company import CompanyIntake
 from poorcharlie.workflow.orchestrator import run_pipeline
 
-# 无参时按 LLM_DEFAULT_PROFILE 读对应 profile 的 env（{PROFILE}_BASE_URL 等）
+# 无参时按 LLM_DEFAULT_PROFILE 读对应的 profile
 llm = create_llm_client()
-
-# 显式指定 profile（与 LLM_DEFAULT_PROFILE 无关）
-# llm = create_llm_client(profile="claude")
-
-# 完全手工指定连接参数（profile 留空；极少需要）
-# llm = create_llm_client(
-#     base_url="https://api.deepseek.com/anthropic",
-#     api_key="sk-xxx",
-#     model="deepseek-reasoner",
-#     provider="deepseek",
-# )
 
 intake = CompanyIntake(ticker="600519", name="贵州茅台", exchange="SSE", sector="食品饮料")
 ctx = asyncio.run(run_pipeline(intake, llm=llm))
@@ -86,32 +139,6 @@ committee = ctx.get_result("committee")
 print(committee.final_label)
 print(committee.thesis)
 ```
-
-> **LLM 配置的三层优先级**（`create_llm_client` 的 resolution 顺序）：
->
-> 1. **显式 kwargs**（`base_url` / `api_key` / `model` / `provider` / `extra_body`）—— 最高优先级
-> 2. **命名 profile**（`profile="claude"` 或 `LLM_DEFAULT_PROFILE` env）—— 从 `{PROFILE}_BASE_URL`、`{PROFILE}_API_KEY`、`{PROFILE}_MODEL`、`{PROFILE}_PROVIDER`、`{PROFILE}_EXTRA_BODY` 读取
-> 3. **Legacy `LLM_*` env**—— 向后兼容，默认 profile env 缺失时自动回退
->
-> **切换 provider 三种方式**：
->
-> ```bash
-> # (a) 改 .env 的 LLM_DEFAULT_PROFILE=claude —— 全局切换
-> # (b) 命令行一次性切换：
-> LLM_DEFAULT_PROFILE=claude uv run python scripts/backtest/run_full_backtest.py ...
-> # (c) 代码里显式指定：create_llm_client(profile="claude")
-> ```
->
-> **Profile 命名与 provider 标签的区别**：
-> - `profile` 是**连接配置的名字**（`minimax` / `claude` / `deepseek` / …）
-> - `provider` 是**厂商标签**，只用于触发厂商特例分支（如 MiniMax 2056 配额的 30 分钟 sleep）
-> - 默认 profile name = provider tag；极少情况下同一 profile 可以指定不同 provider（如多厂商共用同一网关）
->
-> **Anthropic Messages API 兼容**：MiniMax / Claude / DeepSeek 都支持 Anthropic Messages 协议，换 `base_url` 和 `api_key` 即可。无需换 SDK。
->
-> **MiniMax 专有参数**（`context_window_size`、`effort`）通过 `MINIMAX_EXTRA_BODY`（JSON 字符串）注入，不污染其他 profile。
->
-> **验证配置**：`uv run python scripts/llm_diag.py`（报告所有已配置 profile 的连通性 + 单次 ping 延迟）。
 
 ### 回测模式（历史数据）
 
@@ -343,16 +370,21 @@ for k, v in data.items():
 
 ## 环境变量
 
-**LLM profile 变量**（每个 profile 一套；至少配置一个 + 设 `LLM_DEFAULT_PROFILE`）：
+**LLM 相关**（详见上面"LLM 配置"章节，4 个 profile 任选一个或多个）：
 
 | 变量 | 必需 | 说明 |
 |------|:----:|------|
-| `LLM_DEFAULT_PROFILE` | 是 | 当前激活的 profile 名（`minimax` / `claude` / `deepseek` / `openai` / `qwen`） |
-| `{PROFILE}_BASE_URL` | 是 | 例如 `MINIMAX_BASE_URL`、`CLAUDE_BASE_URL` |
-| `{PROFILE}_API_KEY` | 是 | API key |
+| `LLM_DEFAULT_PROFILE` | 是 | `minimax` / `dashscope` / `deepseek` / `claude` 之一——当前激活的 profile |
+| `{PROFILE}_BASE_URL` | 是 | 例：`MINIMAX_BASE_URL`、`DASHSCOPE_BASE_URL` |
+| `{PROFILE}_API_KEY` | 是 | 对应的 API key |
 | `{PROFILE}_MODEL` | 是 | 模型名 |
-| `{PROFILE}_PROVIDER` | 否 | 厂商标签（默认等于 profile name）；用于特例分支 |
-| `{PROFILE}_EXTRA_BODY` | 否 | JSON 字符串，厂商专有参数（如 MiniMax 的 `context_window_size`） |
+| `{PROFILE}_PROVIDER` | 否 | 厂商标签（控制特例分支，如 MiniMax 2056 配额重试），默认等于 profile 名 |
+| `{PROFILE}_EXTRA_BODY` | 否 | JSON，厂商专有参数（如 MiniMax 的 `context_window_size`） |
+
+**实现原理**（知道更好，不懂也能用）：
+- 所有 provider 都走统一的 Anthropic Messages API 协议
+- `create_llm_client()` 会按 `LLM_DEFAULT_PROFILE` 读对应的 `{NAME}_BASE_URL` + `_API_KEY` + `_MODEL`
+- 想切就改 `LLM_DEFAULT_PROFILE` 一行，不用改代码
 
 **Legacy（向后兼容，未配置 profile 时用）**：
 
