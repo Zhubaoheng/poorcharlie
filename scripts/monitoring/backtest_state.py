@@ -715,7 +715,8 @@ _OPP_DONE_RE = re.compile(
     r"Decision pipeline complete: (?P<n_pos>\d+) positions, (?P<cash>-?\d+)% cash"
 )
 _OPP_ACTION_RE = re.compile(
-    r"^\s*(?P<ticker>\d{6})\s+\S+:\s+(?P<action>BUY|ADD|HOLD|REDUCE|EXIT)\s+(?P<weight>-?\d+)%"
+    r"decision_pipeline\s+INFO\s+(?P<ticker>\d{6})\s+\S+:\s+"
+    r"(?P<action>BUY|ADD|HOLD|REDUCE|EXIT)\s+(?P<weight>-?\d+)%"
 )
 _AGENT_TOOK_RE = re.compile(
     r"\[(?P<ticker>\d{6}|\w+)\]\s+(?P<agent>[\w_]+)\s+took\s+(?P<sec>[\d.]+)s"
@@ -797,19 +798,35 @@ def get_opportunity_queue(run_dir: Path) -> OpportunityQueue | None:
         m2 = _OPP_DONE_RE.search(line)
         if m2 and started:
             trig_ticker = started[-1]["ticker"]
-            # Scan up to next 40 lines for the per-ticker action line.
-            action_part = "not in portfolio"
+            trig_action: str | None = None
+            other_changes: list[str] = []  # non-HOLD actions on other tickers
             for j in range(idx + 1, min(idx + 40, len(lines))):
                 ma = _OPP_ACTION_RE.search(lines[j])
-                if ma and ma["ticker"] == trig_ticker:
-                    action_part = f"{ma['action']} {ma['weight']}%"
-                    break
+                if ma:
+                    ticker = ma["ticker"]
+                    action = ma["action"]
+                    wt = ma["weight"]
+                    if ticker == trig_ticker:
+                        trig_action = f"{action} {wt}%"
+                    elif action != "HOLD":
+                        other_changes.append(f"{action} {ticker} {wt}%")
+                    continue
                 if _OPP_START_RE.search(lines[j]) or _OPP_DONE_RE.search(lines[j]):
-                    break  # entered next opportunity block
+                    break
+            # Build summary
+            if trig_action is None:
+                trig_part = "skip"
+            else:
+                trig_part = trig_action
+            parts = [trig_part]
+            if other_changes:
+                # Limit to 2 most interesting to keep display tight
+                parts.append("also " + ", ".join(other_changes[:2]))
+            parts.append(f"→ {m2['n_pos']}p {m2['cash']}%c")
             completed.append({
                 "ticker": trig_ticker,
                 "ts": line[:19],
-                "summary": f"{action_part} · port {m2['n_pos']}pos {m2['cash']}%c",
+                "summary": " · ".join(parts),
             })
 
     # Reconcile: mark status
