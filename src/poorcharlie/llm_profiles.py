@@ -120,14 +120,25 @@ def resolve_default_profile() -> str:
 
 
 def list_available_profiles() -> list[str]:
-    """Scan env for which known profiles have a full config. Diagnostic use only."""
-    available = []
-    for name in _PROFILE_DEFAULT_PROVIDER:
+    """Return profile names that have full `{NAME}_BASE_URL`/`_API_KEY`/`_MODEL` set.
+
+    Scans all env vars ending in ``_BASE_URL``; any name whose companion
+    ``_API_KEY`` and ``_MODEL`` are also present is reported as available.
+    Users aren't constrained to the known-provider list — a profile named
+    ``DASHSCOPE`` or ``AZURE_OPENAI`` works just as well.
+    """
+    known = set(_PROFILE_DEFAULT_PROVIDER.keys())
+    seen: set[str] = set()
+    available: list[str] = []
+    for key in os.environ:
+        if not key.endswith("_BASE_URL"):
+            continue
+        name = key[:-len("_BASE_URL")].lower()
+        if name in seen or name in ("llm",):
+            continue  # skip the legacy generic LLM_ prefix
+        seen.add(name)
         up = name.upper()
-        if (
-            os.getenv(f"{up}_BASE_URL")
-            and os.getenv(f"{up}_API_KEY")
-            and os.getenv(f"{up}_MODEL")
-        ):
+        if os.getenv(f"{up}_API_KEY") and os.getenv(f"{up}_MODEL"):
             available.append(name)
-    return available
+    # Sort: known providers first (stable order), then alphabetical
+    return sorted(available, key=lambda n: (n not in known, n))

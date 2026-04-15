@@ -35,6 +35,12 @@ MINIMAX_EXTRA_BODY={"context_window_size":200000,"effort":"high"}
 # DEEPSEEK_MODEL=deepseek-reasoner
 # DEEPSEEK_PROVIDER=deepseek
 
+# 可选：DashScope (阿里云百炼) profile — Qwen via Anthropic-compatible endpoint
+# DASHSCOPE_BASE_URL=https://coding.dashscope.aliyuncs.com/apps/anthropic
+# DASHSCOPE_API_KEY=sk-sp-xxx
+# DASHSCOPE_MODEL=qwen3-coder-plus
+# DASHSCOPE_PROVIDER=qwen
+
 # 当前激活的 profile
 LLM_DEFAULT_PROFILE=minimax
 EOF
