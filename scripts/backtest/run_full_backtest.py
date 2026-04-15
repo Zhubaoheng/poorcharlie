@@ -213,8 +213,13 @@ def main():
                      "(COLD START)" if i == 0 else "(INCREMENTAL)")
         logger.info("=" * 70)
 
-        # Run pipeline
-        if i == 0:
+        # Reuse an already-completed run for this date if it exists
+        # (avoids re-running pipeline after a mid-flow crash/resume).
+        existing = _find_latest_run(scan_date.isoformat())
+        if existing is not None:
+            run_dir = existing
+            logger.info("Reusing existing completed run for S%d: %s", i, run_dir.name)
+        elif i == 0:
             # Cold start: full screening
             run_dir = _run_overnight(
                 top_n=args.top,
@@ -255,19 +260,29 @@ def main():
         logger.info("S%d portfolio: %d positions, %.0f%% cash",
                      i, len(alloc), (1 - sum(alloc.values())) * 100)
 
+        # Persist scan decision immediately so a trigger crash doesn't lose it.
+        save_decisions(decisions_file, all_decisions)
+
         # Between-scan trigger processing (opportunity triggers only)
         if i < len(SCAN_DATES) - 1:
             next_date = SCAN_DATES[i + 1]
             store_path = run_dir / "candidate_store.json"
             if store_path.exists():
-                _detect_triggers(
-                    store_path, scan_date, next_date,
-                    all_decisions, trigger_dir,
-                )
+                try:
+                    _detect_triggers(
+                        store_path, scan_date, next_date,
+                        all_decisions, trigger_dir,
+                    )
+                except Exception:
+                    logger.exception(
+                        "Trigger detection between S%d and S%d failed; "
+                        "continuing to next scan.",
+                        i, i + 1,
+                    )
 
         prev_run_dir = run_dir
 
-        # Save progress after each scan (schema v1.1)
+        # Save again after triggers (may have added opportunity_trigger records)
         save_decisions(decisions_file, all_decisions)
         logger.info("Saved %d decision points to %s", len(all_decisions), decisions_file)
 

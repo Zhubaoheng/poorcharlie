@@ -23,11 +23,18 @@ Legacy v1.0 format (still readable for backward compat):
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
+logger = logging.getLogger(__name__)
+
 CURRENT_SCHEMA = "1.1"
 TOLERANCE = 1e-6
+# LLM-generated weights (from PortfolioStrategyAgent) can overshoot 1.0 by a
+# few percent due to rounding / arithmetic imprecision. Scale them down silently
+# up to this threshold; beyond it, treat as a bug and raise.
+RENORMALIZE_MAX_OVERFLOW = 0.10  # up to +10% overflow → auto-scale
 
 
 def load_decisions(path: Path) -> dict[str, dict[str, Any]]:
@@ -70,11 +77,28 @@ def make_record(
     trigger_ticker: str | None = None,
     trigger_reason: str | None = None,
 ) -> dict[str, Any]:
-    """Build a decision record dict with computed cash and validated weights."""
-    cash = 1.0 - sum(weights.values())
-    if cash < -TOLERANCE:
-        raise ValueError(f"weights sum > 1.0: {sum(weights.values())}")
-    cash = max(0.0, cash)
+    """Build a decision record dict with computed cash and validated weights.
+
+    Small LLM-induced overshoot (<=10%) is auto-scaled down; larger overshoot
+    is treated as a bug and raises.
+    """
+    weights = dict(weights)  # defensive copy before possible renormalize
+    total = sum(weights.values())
+    overflow = total - 1.0
+    if overflow > RENORMALIZE_MAX_OVERFLOW:
+        raise ValueError(
+            f"weights sum {total:.3f} > 1.0 by {overflow:.3f} "
+            f"(cap {RENORMALIZE_MAX_OVERFLOW:.0%}); likely a bug: {weights}"
+        )
+    if overflow > TOLERANCE:
+        logger.warning(
+            "weights sum %.3f > 1.0 by %.3f (n=%d); scaling down to 1.0",
+            total, overflow, len(weights),
+        )
+        scale = 1.0 / total
+        weights = {t: w * scale for t, w in weights.items()}
+        total = 1.0
+    cash = max(0.0, 1.0 - total)
     rec: dict[str, Any] = {
         "source": source,
         "weights": dict(weights),
