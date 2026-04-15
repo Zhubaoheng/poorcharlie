@@ -158,7 +158,12 @@ def _holdings_panel(s: Snapshot) -> Panel:
             "CASH", f"{(1-total_w)*100:.1f}%", "", "", "",
             style="dim",
         )
-    return Panel(table, title=f"Holdings ({len(s.holdings)})", border_style="green")
+    title = f"Holdings ({len(s.holdings)})"
+    if s.holdings_source and "candidate_store.json" in s.holdings_source:
+        # Shorten for the panel title
+        src = s.holdings_source.replace("candidate_store.json", "").rstrip("/").split("/")[-1]
+        title += f" · from {src}"
+    return Panel(table, title=title, border_style="green")
 
 
 def _llm_panel(s: Snapshot) -> Panel:

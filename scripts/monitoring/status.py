@@ -108,7 +108,8 @@ def print_snapshot(s: Snapshot) -> None:
     # Holdings
     if s.holdings:
         total_w = sum(h.weight for h in s.holdings)
-        print(f"\nHoldings ({len(s.holdings)}):  equity {_fmt_weight(total_w)} / cash {_fmt_weight(1-total_w)}")
+        src = f"  [from {s.holdings_source}]" if s.holdings_source else ""
+        print(f"\nHoldings ({len(s.holdings)}):  equity {_fmt_weight(total_w)} / cash {_fmt_weight(1-total_w)}{src}")
         for h in sorted(s.holdings, key=lambda x: -x.weight):
             print(f"  {h.ticker} {h.name:<10}  {_fmt_weight(h.weight):>6}  "
                   f"{h.final_label or '?':<12}  Q={h.enterprise_quality or '?':<5}  "

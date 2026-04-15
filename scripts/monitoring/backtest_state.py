@@ -504,10 +504,60 @@ def get_label_distribution(run_dir: Path) -> dict[str, int]:
 # Holdings (enriched with latest candidate snapshot)
 # ---------------------------------------------------------------------------
 
+def _find_latest_store_path(run_dir: Path) -> Path | None:
+    """Return the most recent authoritative candidate_store.json.
+
+    Priority:
+      1. Current run's store (exists only after its Phase 5 decision ran)
+      2. Most recent opportunity-trigger dir's store
+      3. Most recent *completed* scan run's store
+
+    During Phase 4 of a new scan, #1 doesn't exist yet — holdings haven't
+    changed since the previous scan or trigger, so we reach back there.
+    """
+    current = run_dir / "candidate_store.json"
+    if current.exists():
+        return current
+
+    # Opportunity trigger dirs
+    triggers_dir = FULL_BACKTEST_DIR / "triggers"
+    if triggers_dir.exists():
+        trig_stores = sorted(
+            triggers_dir.glob("opp_*/candidate_store.json"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        if trig_stores:
+            return trig_stores[0]
+
+    # Previous completed scan runs (pick latest by started_at)
+    for rm in list_runs():
+        p = rm.run_dir / "candidate_store.json"
+        if rm.status == "completed" and p.exists():
+            return p
+    return None
+
+
+_LAST_HOLDINGS_SOURCE: str = ""
+
+
+def get_holdings_source() -> str:
+    """Human-readable description of where holdings were last loaded from."""
+    return _LAST_HOLDINGS_SOURCE
+
+
 def get_holdings_enriched(run_dir: Path) -> list[HoldingDetail]:
-    store_path = run_dir / "candidate_store.json"
-    if not store_path.exists():
+    global _LAST_HOLDINGS_SOURCE
+    store_path = _find_latest_store_path(run_dir)
+    if store_path is None:
+        _LAST_HOLDINGS_SOURCE = "(no store found)"
         return []
+    # Tag the source
+    try:
+        rel = store_path.relative_to(PROJECT_ROOT)
+    except Exception:
+        rel = store_path
+    _LAST_HOLDINGS_SOURCE = str(rel)
     try:
         store = json.loads(store_path.read_text(encoding="utf-8"))
     except Exception:
@@ -1014,6 +1064,7 @@ class Snapshot:
     decisions: list[Decision]
     opp_queue: OpportunityQueue | None = None
     ticker_pipeline: TickerPipeline | None = None
+    holdings_source: str = ""
 
 
 def get_snapshot() -> Snapshot:
@@ -1051,4 +1102,5 @@ def get_snapshot() -> Snapshot:
         decisions=get_decision_timeline(),
         opp_queue=opp_queue,
         ticker_pipeline=ticker_pipeline,
+        holdings_source=get_holdings_source(),
     )
