@@ -182,58 +182,42 @@ async def run_triggers(
     filing_cache = FilingCache(PROJECT_ROOT / "data" / "cache" / "filings")
     akshare_cache = AkShareCache(PROJECT_ROOT / "data" / "cache" / "akshare")
 
-    # Decide concurrency. Priority: arg > env > default 10.
-    # Matches the main scan's pipeline_concurrency=10 default. Each trigger
-    # internally runs ~14 agents (some in parallel), so peak in-flight calls
-    # can be high; the 2056 polling path absorbs quota exhaustion when it
-    # hits, so this mostly trades off "burn quota fast then wait" vs
-    # "trickle out at low throughput".
-    if concurrency is None:
-        import os as _os
-        try:
-            concurrency = int(_os.getenv("OPPORTUNITY_TRIGGER_CONCURRENCY", "10"))
-        except ValueError:
-            concurrency = 10
-    concurrency = max(1, concurrency)
-
+    # Serial execution with CASCADING baseline: each trigger re-evaluates
+    # using the PREVIOUS trigger's (or scan's) output as its starting
+    # store. Parallelism would violate the temporal ordering — trigger N+1
+    # must see trigger N's allocation to reason about "what to do next".
+    # The `concurrency` argument is accepted for API compat but ignored.
     eligible = [
-        (td, tk) for td, tk in val_triggers
+        (td, tk) for td, tk in sorted(val_triggers, key=lambda p: p[0])
         if (c := store._state.candidates.get(tk)) is not None
         and c.final_label in _ELIGIBLE_LABELS
     ]
     logger.info(
-        "Processing %d opportunity triggers with full pipeline re-eval "
-        "(concurrency=%d)",
-        len(eligible), concurrency,
+        "Processing %d opportunity triggers with cascading baseline (serial)",
+        len(eligible),
     )
 
-    sem = asyncio.Semaphore(concurrency)
+    # Rolling baseline: starts as the scan store, updates to each
+    # successful trigger's output so the next trigger sees the latest
+    # allocation state.
+    rolling_baseline = prev_store_path
 
-    async def _process_one(trigger_date: date, ticker: str):
-        async with sem:
-            trig_dir = trigger_output_dir / f"opp_{trigger_date.isoformat()}_{ticker}"
-            try:
-                return trigger_date, ticker, await reevaluate_ticker(
-                    ticker=ticker,
-                    trigger_date=trigger_date,
-                    prev_store_path=prev_store_path,
-                    trigger_output_dir=trig_dir,
-                    llm=llm,
-                    filing_cache=filing_cache,
-                    akshare_cache=akshare_cache,
-                )
-            except Exception:
-                logger.warning("Opportunity re-eval failed for %s on %s",
-                               ticker, trigger_date, exc_info=True)
-                return trigger_date, ticker, None
-
-    tasks = [_process_one(td, tk) for td, tk in eligible]
-    # Preserve chronological order when writing back — triggers with the
-    # same trigger_date could race; dict assignment is atomic in Python.
-    results = await asyncio.gather(*tasks, return_exceptions=False)
-
-    # Sort by trigger_date to keep all_decisions keys chronologically grouped
-    for trigger_date, ticker, outcome in sorted(results, key=lambda r: r[0]):
+    for trigger_date, ticker in eligible:
+        trig_dir = trigger_output_dir / f"opp_{trigger_date.isoformat()}_{ticker}"
+        try:
+            outcome = await reevaluate_ticker(
+                ticker=ticker,
+                trigger_date=trigger_date,
+                prev_store_path=rolling_baseline,  # ← cascades
+                trigger_output_dir=trig_dir,
+                llm=llm,
+                filing_cache=filing_cache,
+                akshare_cache=akshare_cache,
+            )
+        except Exception:
+            logger.warning("Opportunity re-eval failed for %s on %s",
+                           ticker, trigger_date, exc_info=True)
+            continue
         if outcome is None:
             continue
         allocations, meta = outcome
@@ -251,6 +235,11 @@ async def run_triggers(
             ticker, trigger_date, len(allocations),
             rec["cash"] * 100, meta["pipeline_label"],
         )
+        # Roll the baseline forward so the next trigger sees this
+        # trigger's allocation as the starting point.
+        new_baseline = trig_dir / "candidate_store.json"
+        if new_baseline.exists():
+            rolling_baseline = new_baseline
 
 
 def main():
