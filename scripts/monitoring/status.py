@@ -53,7 +53,13 @@ def print_snapshot(s: Snapshot) -> None:
     if s.phase:
         ph = f"Phase {s.phase.phase} · {s.phase.phase_name}" if s.phase.phase else s.phase.phase_name
         if s.phase.current_activity:
-            ph += f"  ▸ {s.phase.current_activity}"
+            dur = ""
+            if s.phase.seconds_since_activity is not None:
+                m, sec = divmod(s.phase.seconds_since_activity, 60)
+                dur = f" ({m}m{sec:02d}s ago)" if m else f" ({sec}s ago)"
+            ph += f"  ▸ {s.phase.current_activity}{dur}"
+        if s.phase.seconds_since_last_log is not None and s.phase.seconds_since_last_log > 120:
+            ph += f"  ⚠ log idle {s.phase.seconds_since_last_log//60}m"
         print(f"Now     : {ph}")
     if s.progress:
         pct = 100.0 * s.progress.done / s.progress.total if s.progress.total else 0.0

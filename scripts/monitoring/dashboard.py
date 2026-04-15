@@ -103,7 +103,15 @@ def _scans_panel(s: Snapshot) -> Panel:
         phase_style = "yellow" if s.phase.phase in (5, 6) else "cyan"
         t.append(f"Phase {s.phase.phase} · {s.phase.phase_name}", style=phase_style)
         if s.phase.current_activity:
+            ago = ""
+            if s.phase.seconds_since_activity is not None:
+                m, sec = divmod(s.phase.seconds_since_activity, 60)
+                ago = f"  [{m}m{sec:02d}s ago]" if m else f"  [{sec}s ago]"
             t.append(f"\n  ▸ {s.phase.current_activity}", style="dim")
+            t.append(ago, style="yellow" if (s.phase.seconds_since_activity or 0) > 180 else "dim")
+        if s.phase.seconds_since_last_log is not None and s.phase.seconds_since_last_log > 120:
+            t.append(f"\n  ⚠ log idle {s.phase.seconds_since_last_log//60}m — process may be stuck",
+                     style="red")
 
     if s.progress and s.progress.total > 0:
         pct = 100 * s.progress.done / s.progress.total

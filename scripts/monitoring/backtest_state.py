@@ -65,6 +65,9 @@ class PhaseInfo:
     phase: int               # 1..5 (0 = unknown / idle)
     phase_name: str
     current_activity: str    # free-form: e.g. "Pipeline 199/199" or "CrossComparison"
+    activity_ts: str | None = None       # timestamp of the activity line
+    seconds_since_activity: int | None = None  # how long ago (liveness check)
+    seconds_since_last_log: int | None = None  # since ANY log line (stuck detection)
 
 
 @dataclass
@@ -319,7 +322,12 @@ def get_current_phase(run_dir: Path) -> PhaseInfo:
         phase_num = 6
         phase_name = "Between-scan triggers"
 
-    # Most recent activity (tail-most relevant line)
+    # Defined later to use combined log tail
+    # (moved to avoid forward reference)
+
+    # Most recent activity — scanned newest-first, first match wins.
+    # Patterns ordered by specificity, but list is only referenced once per line
+    # so the tail-most (chronologically latest) matching line wins regardless.
     activity_patterns = [
         (re.compile(r"Opportunity trigger: running pipeline for (\S+) (\S+) as_of=(\S+)"),
          lambda m: f"Opportunity re-eval: {m.group(1)} {m.group(2)} @{m.group(3)}"),
@@ -331,20 +339,42 @@ def get_current_phase(run_dir: Path) -> PhaseInfo:
          lambda m: f"CrossComparisonAgent ({m.group(1)} candidates)"),
         (_PIPELINE_LINE_RE,
          lambda m: f"Pipeline {m.group('done')}/{m.group('total')} {m.group('ticker')} → {m.group('label')}"),
+        # Agent-level: "[TICKER] AGENT took Ns" — lowest specificity but catches
+        # single-ticker opportunity re-eval progress when no higher-level
+        # pattern is present on the latest log lines.
+        (re.compile(r"\[(?P<ticker>\d{6}|\w+)\]\s+(?P<agent>\w+)\s+took\s+(?P<sec>[\d.]+)s"),
+         lambda m: f"[{m.group('ticker')}] {m.group('agent')} ({m.group('sec')}s)"),
+        # PDF extract logs ("Processing 年报 2023")
+        (re.compile(r"Processing\s+(年报|半年报|Annual Report)\s+(\d{4})"),
+         lambda m: f"Filing extract: {m.group(1)} {m.group(2)}"),
     ]
     # Combine both logs and sort by timestamp so the most recent wins across
     # both sources (opportunity triggers live in orchestrator log; scan
     # pipeline events in run log).
     combined = [l for l in (orch_lines[-60:] + run_lines[-60:]) if len(l) >= 19]
     combined.sort(key=lambda l: l[:19])
+
+    activity_ts: str | None = None
+    last_log_ts: str | None = combined[-1][:19] if combined else None
+
     for line in reversed(combined):
         for pat, render in activity_patterns:
             m = pat.search(line)
             if m:
                 activity = render(m)
+                activity_ts = line[:19]
                 break
         if activity:
             break
+
+    def _seconds_since(ts: str | None) -> int | None:
+        if not ts:
+            return None
+        try:
+            dt = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+            return int((datetime.now() - dt).total_seconds())
+        except Exception:
+            return None
     if not activity:
         # Fall back to last 'info_capture' / 'committee' style agent step
         for line in reversed(lines[-20:]):
@@ -352,7 +382,14 @@ def get_current_phase(run_dir: Path) -> PhaseInfo:
                 activity = line.split(" INFO ")[-1].strip() if " INFO " in line else line.strip()[:80]
                 break
 
-    return PhaseInfo(phase=phase_num, phase_name=phase_name, current_activity=activity)
+    return PhaseInfo(
+        phase=phase_num,
+        phase_name=phase_name,
+        current_activity=activity,
+        activity_ts=activity_ts,
+        seconds_since_activity=_seconds_since(activity_ts),
+        seconds_since_last_log=_seconds_since(last_log_ts),
+    )
 
 
 def get_pipeline_progress(run_dir: Path) -> PipelineProgress:
