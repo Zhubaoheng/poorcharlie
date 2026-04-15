@@ -266,12 +266,42 @@ def list_runs() -> list[RunMeta]:
     return out
 
 
+def _active_overnight_as_of_date() -> str | None:
+    """Parse the --as-of-date arg from a live run_overnight subprocess, if any."""
+    try:
+        raw = subprocess.check_output(
+            ["ps", "-eo", "command"], text=True,
+        )
+    except Exception:
+        return None
+    for line in raw.splitlines():
+        if "run_overnight.py" in line and "--as-of-date" in line:
+            parts = line.split()
+            try:
+                i = parts.index("--as-of-date")
+                return parts[i + 1]
+            except (ValueError, IndexError):
+                continue
+    return None
+
+
 def get_latest_run() -> RunMeta | None:
-    """Latest run by started_at (whether completed or running)."""
+    """Pick the most relevant run to display.
+
+    Priority:
+      1. A run whose as_of_date matches a live run_overnight subprocess
+         (ground truth — orchestrator is currently working on this one)
+      2. Most recently started "running" run
+      3. Most recently started any run
+    """
     runs = list_runs()
     if not runs:
         return None
-    # Prefer a currently-running one over completed
+    active_as_of = _active_overnight_as_of_date()
+    if active_as_of:
+        match = [r for r in runs if r.as_of_date == active_as_of]
+        if match:
+            return max(match, key=lambda r: r.started_at or "")
     running = [r for r in runs if r.status == "running"]
     if running:
         return max(running, key=lambda r: r.started_at or "")
@@ -983,30 +1013,36 @@ def _import_scan_dates() -> list[date]:
 
 
 def get_scan_schedule() -> list[ScanPoint]:
-    """Return the 5 SCAN_DATES tagged as done/running/pending."""
+    """Return the 5 SCAN_DATES tagged as done/running/pending.
+
+    "Running" is attributed to the scan whose as_of_date matches a live
+    run_overnight subprocess (ground truth). Other scans with run.json
+    status="running" (e.g. manually flipped for resume) are treated as
+    pending until they're actually being processed.
+    """
     scan_dates = _import_scan_dates()
     if not scan_dates:
         return []
-    done: set[str] = set()
-    running: str | None = None
 
-    # 1) completed runs → done
+    active_as_of = _active_overnight_as_of_date()
+    all_decs = get_decision_timeline()
+    decided_dates = {d.date_str for d in all_decs if d.source == "scan"}
+
+    # A scan is "done" if either its run is completed OR we already have
+    # a scan-type decision recorded for that date (orchestrator logs
+    # write the decision immediately after scan success).
+    done: set[str] = set(decided_dates)
     for rm in list_runs():
         if rm.as_of_date and rm.status == "completed":
             done.add(rm.as_of_date)
-    # 2) currently-running run → running
-    for rm in list_runs():
-        if rm.as_of_date and rm.status == "running":
-            running = rm.as_of_date
-            break
 
     result: list[ScanPoint] = []
     for i, d in enumerate(scan_dates):
         ds = d.isoformat()
-        if ds in done:
-            status = "done"
-        elif ds == running:
+        if ds == active_as_of:
             status = "running"
+        elif ds in done:
+            status = "done"
         else:
             status = "pending"
         result.append(ScanPoint(scan_id=f"S{i}", scan_date=d, status=status))
