@@ -70,7 +70,15 @@ def _fetch_quote_baostock(ticker: str, exchange: str, as_of_date: date) -> dict[
 
     try:
         t0 = _time.time()
-        with _BS_QUERY_LOCK:
+        # Bounded-wait lock: if a prior query hung holding the lock (socket
+        # deadlock observed in production), fail fast instead of blocking
+        # all concurrent pipelines. 60s is generous; a healthy query returns
+        # in <1s.
+        if not _BS_QUERY_LOCK.acquire(timeout=60):
+            logger.warning("baostock %s: query lock wait >60s — prior query likely hung, skipping",
+                           ticker)
+            return None
+        try:
             rs = bs.query_history_k_data_plus(
                 bs_code, "date,close,peTTM,pbMRQ",
                 start_date=start, end_date=end,
@@ -80,6 +88,8 @@ def _fetch_quote_baostock(ticker: str, exchange: str, as_of_date: date) -> dict[
             while rs.error_code == "0" and rs.next():
                 rows.append(rs.get_row_data())
             error_code = rs.error_code
+        finally:
+            _BS_QUERY_LOCK.release()
         elapsed = _time.time() - t0
         if elapsed > 5:
             logger.warning("baostock SLOW query for %s: %.1fs", ticker, elapsed)
