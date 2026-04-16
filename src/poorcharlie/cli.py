@@ -16,6 +16,14 @@ import sys
 import time
 from pathlib import Path
 
+# Line-buffer stdout so print() shows up immediately when piped/redirected
+# (default full-buffering leaves users staring at an empty terminal for
+# the first ~30s while yfinance fetches warm up).
+try:
+    sys.stdout.reconfigure(line_buffering=True)  # type: ignore[attr-defined]
+except (AttributeError, ValueError):
+    pass
+
 from dotenv import load_dotenv
 load_dotenv()
 

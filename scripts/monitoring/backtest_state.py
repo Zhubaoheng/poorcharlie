@@ -297,6 +297,8 @@ def get_latest_run() -> RunMeta | None:
     runs = list_runs()
     if not runs:
         return None
+    # Only honor active_as_of if a LOCAL run exists for it — ps may show
+    # processes from other clones on the same machine.
     active_as_of = _active_overnight_as_of_date()
     if active_as_of:
         match = [r for r in runs if r.as_of_date == active_as_of]
@@ -1077,10 +1079,10 @@ def get_scan_schedule() -> list[ScanPoint]:
     active_as_of = _active_overnight_as_of_date()
     all_decs = get_decision_timeline()
     decided_dates = {d.date_str for d in all_decs if d.source == "scan"}
+    local_run_dates = {rm.as_of_date for rm in list_runs() if rm.as_of_date}
 
     # A scan is "done" if either its run is completed OR we already have
-    # a scan-type decision recorded for that date (orchestrator logs
-    # write the decision immediately after scan success).
+    # a scan-type decision recorded for that date.
     done: set[str] = set(decided_dates)
     for rm in list_runs():
         if rm.as_of_date and rm.status == "completed":
@@ -1089,7 +1091,11 @@ def get_scan_schedule() -> list[ScanPoint]:
     result: list[ScanPoint] = []
     for i, d in enumerate(scan_dates):
         ds = d.isoformat()
-        if ds == active_as_of:
+        # Only consider active_as_of authoritative if we actually have a
+        # local run matching that date — otherwise ps may be showing a
+        # process from a different clone on the same machine.
+        is_running = (ds == active_as_of and ds in local_run_dates)
+        if is_running:
             status = "running"
         elif ds in done:
             status = "done"
