@@ -16,7 +16,10 @@ import sys
 import time
 from pathlib import Path
 
-from poorcharlie.config import Settings
+from dotenv import load_dotenv
+load_dotenv()
+
+from poorcharlie.config import Settings, create_llm_client
 from poorcharlie.llm import LLMClient
 from poorcharlie.report import generate_debug_log, generate_report
 from poorcharlie.schemas.company import CompanyIntake
@@ -102,22 +105,10 @@ async def _run(args: argparse.Namespace) -> None:
     )
 
     settings = Settings()
-    extra_body = None
-    if settings.provider == "minimax":
-        extra_body = {
-            "context_window_size": 200000,
-            "effort": "high",
-        }
-    llm = LLMClient(
-        provider=settings.provider,
-        model=settings.model_name,
-        base_url=settings.api_base_url,
-        api_key=settings.api_key,
-        extra_body=extra_body,
-    )
+    llm = create_llm_client()
 
     print(f"开始分析: {name} ({ticker}.{exchange})")
-    print(f"LLM: {settings.provider} / {settings.model_name}")
+    print(f"LLM: {llm.provider} / {llm.model}")
     print("=" * 60)
 
     t0 = time.time()
