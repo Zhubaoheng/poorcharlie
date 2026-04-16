@@ -121,11 +121,17 @@ class LLMClient:
             "max_tokens": max_tokens,
             "temperature": self._temperature,
         }
-        # Force specific tool if exactly one tool is provided
-        if len(tools) == 1:
-            kwargs["tool_choice"] = {"type": "tool", "name": tools[0]["name"]}
-        elif tools:
-            kwargs["tool_choice"] = {"type": "any"}
+        # Tool choice: force specific tool when possible, but Qwen's thinking
+        # mode rejects {type:"tool"} or {type:"any"} with 400
+        # "InternalError.Algo.InvalidParameter". Use {type:"auto"} for qwen
+        # and rely on the system prompt to make the model pick the tool.
+        if tools:
+            if self.provider == "qwen":
+                kwargs["tool_choice"] = {"type": "auto"}
+            elif len(tools) == 1:
+                kwargs["tool_choice"] = {"type": "tool", "name": tools[0]["name"]}
+            else:
+                kwargs["tool_choice"] = {"type": "any"}
         # Provider-specific parameters (e.g., MiniMax context_window, effort)
         if self._extra_body:
             kwargs["extra_body"] = self._extra_body

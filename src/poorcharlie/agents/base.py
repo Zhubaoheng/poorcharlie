@@ -162,7 +162,16 @@ class BaseAgent(ABC):
 
     def _render_system_prompt(self) -> str:
         soul = build_soul_prompt(self._as_of_date)
-        return f"{soul}\n\n{self._agent_role_description()}"
+        parts = [soul, self._agent_role_description()]
+        # Qwen thinking mode forces tool_choice="auto" (see llm.py); reinforce
+        # the expectation that the model MUST use the provided tool so the
+        # agent pipeline can parse a structured result.
+        if getattr(self._llm, "provider", "") == "qwen":
+            parts.append(
+                "【输出格式要求】你必须且只能通过提供的工具返回结构化结果。"
+                "不要输出纯文本回答。先充分思考，再调用工具一次输出最终结果。"
+            )
+        return "\n\n".join(parts)
 
     def _load_template(self) -> Template:
         templates = importlib.resources.files("poorcharlie.prompts.templates")
