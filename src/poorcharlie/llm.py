@@ -242,18 +242,20 @@ class LLMClient:
                 status = e.status_code if hasattr(e, "status_code") else 429
                 err_msg = str(e)
 
-                # Qwen thinking-mode tool_choice incompatibility: if DashScope
-                # rejects our {type:"tool"} or {type:"any"} with the specific
-                # thinking-mode error, retry once with tool_choice=auto and
-                # let the system prompt direct the model to use the tool.
-                if (self.provider == "qwen"
-                        and status == 400
+                # DashScope thinking-mode tool_choice incompatibility: if the
+                # backend rejects our {type:"tool"} or {type:"any"} with the
+                # specific thinking-mode error, retry once with tool_choice=auto
+                # and let the system prompt direct the model to use the tool.
+                # Error signature is specific enough to match regardless of the
+                # provider tag — users who configure via the legacy LLM_* form
+                # without LLM_PROVIDER=qwen should still be rescued.
+                if (status == 400
                         and "tool_choice" in err_msg
-                        and ("thinking mode" in err_msg or "InvalidParameter" in err_msg)
+                        and "thinking mode" in err_msg
                         and kwargs.get("tool_choice", {}).get("type") != "auto"):
                     logger.warning(
-                        "Qwen thinking-mode rejected tool_choice=%s; retrying with auto",
-                        kwargs.get("tool_choice"),
+                        "%s thinking-mode rejected tool_choice=%s; retrying with auto",
+                        self.provider, kwargs.get("tool_choice"),
                     )
                     kwargs["tool_choice"] = {"type": "auto"}
                     continue
